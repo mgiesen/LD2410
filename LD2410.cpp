@@ -2,7 +2,7 @@
 
 LD2410 *LD2410::_instance = nullptr;
 
-LD2410::LD2410() : _digitalOutputPin(255), _outputCallback(nullptr), _debugSerial(nullptr), _serial(nullptr), _ringBufferHead(0), _ringBufferTail(0)
+LD2410::LD2410() : _digital_output_pin(255), _output_callback(nullptr), _debug_serial(nullptr), _serial(nullptr)
 {
     _instance = this;
 }
@@ -11,39 +11,39 @@ LD2410::LD2410() : _digitalOutputPin(255), _outputCallback(nullptr), _debugSeria
 // DEBUGGING
 //=====================================================================================================================
 
-void LD2410::useDebug(Stream &debugSerial)
+void LD2410::useDebug(Stream &debug_serial)
 {
-    _debugSerial = &debugSerial;
+    _debug_serial = &debug_serial;
     debugPrintln("[LD2410] Debug mode enabled");
 }
 
 void LD2410::debugPrint(const char *message) const
 {
-    if (_debugSerial)
+    if (_debug_serial)
     {
-        _debugSerial->print(message);
+        _debug_serial->print(message);
     }
 }
 
 void LD2410::debugPrintln(const char *message) const
 {
-    if (_debugSerial)
+    if (_debug_serial)
     {
-        _debugSerial->println(message);
+        _debug_serial->println(message);
     }
 }
 
-void LD2410::debugPrintBuffer(const uint8_t *buffer, size_t length) const
+void LD2410::debugPrintBuffer(const char *messageHeader, const uint8_t *buffer, size_t length) const
 {
-    if (_debugSerial)
+    if (_debug_serial)
     {
-        _debugSerial->print("[LD2410] Serial Buffer: ");
+        _debug_serial->print(messageHeader);
         for (size_t i = 0; i < length; i++)
         {
-            _debugSerial->print(buffer[i], HEX);
-            _debugSerial->print(" ");
+            _debug_serial->print(buffer[i], HEX);
+            _debug_serial->print(" ");
         }
-        _debugSerial->println();
+        _debug_serial->println();
     }
 }
 
@@ -51,19 +51,19 @@ void LD2410::debugPrintBuffer(const uint8_t *buffer, size_t length) const
 // OUTPUT PIN OBSERVATION
 //=====================================================================================================================
 
-bool LD2410::beginOutputObservation(uint8_t pin, void (*callback)(bool), uint8_t pinModeOption)
+bool LD2410::beginOutputObservation(uint8_t pin, void (*callback)(bool), uint8_t pin_mode_option)
 {
-    _digitalOutputPin = pin;
-    _outputCallback = callback;
+    _digital_output_pin = pin;
+    _output_callback = callback;
 
-    if (_outputCallback == nullptr)
+    if (_output_callback == nullptr)
     {
         debugPrintln("[LD2410] Callback can't be null. Output observation not started");
         return false;
     }
 
-    pinMode(_digitalOutputPin, pinModeOption);
-    attachInterruptArg(digitalPinToInterrupt(_digitalOutputPin), digitalOutputInterrupt, this, CHANGE);
+    pinMode(_digital_output_pin, pin_mode_option);
+    attachInterruptArg(digitalPinToInterrupt(_digital_output_pin), digitalOutputInterrupt, this, CHANGE);
     debugPrintln("[LD2410] Output observation started successfully");
 
     return true;
@@ -72,26 +72,28 @@ bool LD2410::beginOutputObservation(uint8_t pin, void (*callback)(bool), uint8_t
 void IRAM_ATTR LD2410::digitalOutputInterrupt(void *arg)
 {
     LD2410 *instance = static_cast<LD2410 *>(arg);
-    if (instance && instance->_outputCallback)
+    if (instance && instance->_output_callback)
     {
-        bool state = digitalRead(instance->_digitalOutputPin) == HIGH;
-        instance->_outputCallback(state);
+        bool state = digitalRead(instance->_digital_output_pin) == HIGH;
+        instance->_output_callback(state);
     }
 }
+
 //=====================================================================================================================
 // UART COMMUNICATION
 //=====================================================================================================================
 
-bool LD2410::beginUART(int rxPin, int txPin, HardwareSerial &serial, unsigned long baud)
+bool LD2410::beginUART(uint8_t ld2410_rx_pin, uint8_t ld2410_tx_pin, HardwareSerial &serial, unsigned long baud)
 {
-    if (baud != 9600 && baud != 19200 && baud != 38400 && baud != 57600 && baud != 115200 && baud != 230400 && baud != 256000 && baud != 460800)
+    if (baud != 9600 && baud != 19200 && baud != 38400 && baud != 57600 &&
+        baud != 115200 && baud != 230400 && baud != 256000 && baud != 460800)
     {
         debugPrintln("[LD2410] Baud rate is not supported. UART initialization failed");
         return false;
     }
 
     _serial = &serial;
-    _serial->begin(baud, SERIAL_8N1, rxPin, txPin);
+    _serial->begin(baud, SERIAL_8N1, ld2410_tx_pin, ld2410_rx_pin);
 
     delay(500);
 
@@ -107,118 +109,149 @@ bool LD2410::beginUART(int rxPin, int txPin, HardwareSerial &serial, unsigned lo
     }
 }
 
-void LD2410::readUART()
+void LD2410::printSerialMessage()
 {
-    // Read all available bytes from the serial buffer
-    while (_serial->available() && ringBufferAvailable() > 0)
+    bool new_data = false;
+
+    while (_serial->available())
     {
-        ringBufferWrite(_serial->read());
+        addToBuffer(_serial->read());
+        new_data = true;
     }
 
-    // Parse all available messages
-    while (findMessageStart())
+    if (new_data)
     {
-        size_t messageLength;
-        if (findMessageEnd(messageLength))
+        if (readFrame())
         {
-            uint8_t message[messageLength];
-            for (size_t i = 0; i < messageLength; i++)
-            {
-                message[i] = ringBufferRead();
-            }
-            parseMessage(message, messageLength);
-        }
-        else
-        {
-            break; // Incomplete message, wait for more data
+            debugPrintBuffer("[LD2410] Received frame: ", _radar_data_frame, _radar_data_frame_position);
         }
     }
 }
 
-bool LD2410::findMessageStart()
+void LD2410::proessSerialMessages()
 {
-    while (ringBufferAvailable() >= 4)
-    {
-        const bool dataMessage = ringBufferRead() == 0xFD && ringBufferRead() == 0xFC && ringBufferRead() == 0xFB && ringBufferRead() == 0xFA;
-        const bool ackMessage = ringBufferRead() == 0xF4 && ringBufferRead() == 0xF3 && ringBufferRead() == 0xF2 && ringBufferRead() == 0xF1;
+    bool new_data = false;
 
-        if (dataMessage || ackMessage)
+    while (_serial->available())
+    {
+        addToBuffer(_serial->read());
+        new_data = true;
+    }
+
+    if (new_data)
+    {
+        if (readFrame())
         {
-            _isDataFrame = (ringBufferRead() == 0xF4);
+            // ToDo
+        }
+    }
+}
+
+void LD2410::addToBuffer(uint8_t byte)
+{
+    _circular_buffer[_buffer_head] = byte;
+    _buffer_head = (_buffer_head + 1) % LD2410_BUFFER_SIZE;
+
+    if (_buffer_head == _buffer_tail)
+    {
+        _buffer_tail = (_buffer_tail + 1) % LD2410_BUFFER_SIZE;
+    }
+}
+
+bool LD2410::readFromBuffer(uint8_t &byte)
+{
+    if (_buffer_head == _buffer_tail)
+    {
+        return false;
+    }
+    else
+    {
+        byte = _circular_buffer[_buffer_tail];
+        _buffer_tail = (_buffer_tail + 1) % LD2410_BUFFER_SIZE;
+        return true;
+    }
+}
+
+bool LD2410::findFrameStart()
+{
+    uint8_t byte;
+    while (readFromBuffer(byte))
+    {
+        if (byte == 0xF4 || byte == 0xFD)
+        {
+            _radar_data_frame[0] = byte;
+            _radar_data_frame_position = 1;
+            _frame_started = true;
+            _ack_frame = (byte == 0xFD);
             return true;
         }
     }
     return false;
 }
 
-bool LD2410::findMessageEnd(size_t &messageLength)
+bool LD2410::checkFrameEnd()
 {
-    if (ringBufferAvailable() < 6) // 2 for length, 4 for footer
+    if (_ack_frame)
     {
-        return false;
+        return (_radar_data_frame[0] == 0xFD &&
+                _radar_data_frame[1] == 0xFC &&
+                _radar_data_frame[2] == 0xFB &&
+                _radar_data_frame[3] == 0xFA &&
+                _radar_data_frame[_radar_data_frame_position - 4] == 0x04 &&
+                _radar_data_frame[_radar_data_frame_position - 3] == 0x03 &&
+                _radar_data_frame[_radar_data_frame_position - 2] == 0x02 &&
+                _radar_data_frame[_radar_data_frame_position - 1] == 0x01);
     }
-
-    uint16_t length = ringBufferRead() | (ringBufferRead() << 8);
-
-    if (ringBufferAvailable() < length + 4) // 4 bytes for end frame
+    else
     {
-        return false;
+        return (_radar_data_frame[0] == 0xF4 &&
+                _radar_data_frame[1] == 0xF3 &&
+                _radar_data_frame[2] == 0xF2 &&
+                _radar_data_frame[3] == 0xF1 &&
+                _radar_data_frame[_radar_data_frame_position - 4] == 0xF8 &&
+                _radar_data_frame[_radar_data_frame_position - 3] == 0xF7 &&
+                _radar_data_frame[_radar_data_frame_position - 2] == 0xF6 &&
+                _radar_data_frame[_radar_data_frame_position - 1] == 0xF5);
     }
+}
 
-    size_t endIndex = (_ringBufferTail + length) % RING_BUFFER_SIZE;
-
-    const bool dataEnd = _ringBuffer[endIndex] == 0xF8 &&
-                         _ringBuffer[(endIndex + 1) % RING_BUFFER_SIZE] == 0xF7 &&
-                         _ringBuffer[(endIndex + 2) % RING_BUFFER_SIZE] == 0xF6 &&
-                         _ringBuffer[(endIndex + 3) % RING_BUFFER_SIZE] == 0xF5;
-
-    const bool ackEnd = _ringBuffer[endIndex] == 0x04 &&
-                        _ringBuffer[(endIndex + 1) % RING_BUFFER_SIZE] == 0x03 &&
-                        _ringBuffer[(endIndex + 2) % RING_BUFFER_SIZE] == 0x02 &&
-                        _ringBuffer[(endIndex + 3) % RING_BUFFER_SIZE] == 0x01;
-
-    if ((dataEnd && _isDataFrame) || (ackEnd && !_isDataFrame))
+bool LD2410::readFrame()
+{
+    uint8_t byte_read;
+    while (readFromBuffer(byte_read))
     {
-        messageLength = length + 10; // 4 start + 2 length + length + 4 end
-        return true;
-    }
+        if (!_frame_started)
+        {
+            if (byte_read == 0xF4 || byte_read == 0xFD)
+            {
+                _radar_data_frame[0] = byte_read;
+                _radar_data_frame_position = 1;
+                _frame_started = true;
+                _ack_frame = (byte_read == 0xFD);
+            }
+        }
+        else
+        {
+            _radar_data_frame[_radar_data_frame_position++] = byte_read;
 
+            if (_radar_data_frame_position == 8)
+            {
+                uint16_t intra_frame_data_length = _radar_data_frame[4] | (_radar_data_frame[5] << 8);
+
+                if (intra_frame_data_length + 10 > LD2410_MAX_FRAME_LENGTH)
+                {
+                    _frame_started = false;
+                    _radar_data_frame_position = 0;
+                    continue;
+                }
+            }
+
+            if (_radar_data_frame_position >= 8 && checkFrameEnd())
+            {
+                _frame_started = false;
+                return true;
+            }
+        }
+    }
     return false;
-}
-
-void LD2410::parseMessage(const uint8_t *message, size_t length)
-{
-    debugPrintBuffer(message, length);
-    // TODO: Implement protocol-specific parsing here
-}
-
-void LD2410::ringBufferWrite(uint8_t data)
-{
-    _ringBuffer[_ringBufferHead] = data;
-    _ringBufferHead = (_ringBufferHead + 1) % RING_BUFFER_SIZE;
-    if (_ringBufferHead == _ringBufferTail)
-    {
-        _ringBufferTail = (_ringBufferTail + 1) % RING_BUFFER_SIZE;
-    }
-}
-
-uint8_t LD2410::ringBufferRead()
-{
-    if (_ringBufferHead == _ringBufferTail)
-    {
-        return 0; // Buffer is empty
-    }
-    uint8_t data = _ringBuffer[_ringBufferTail];
-    _ringBufferTail = (_ringBufferTail + 1) % RING_BUFFER_SIZE;
-    return data;
-}
-
-size_t LD2410::ringBufferAvailable() const
-{
-    return (_ringBufferHead - _ringBufferTail + RING_BUFFER_SIZE) % RING_BUFFER_SIZE;
-}
-
-void LD2410::ringBufferClear()
-{
-    _ringBufferHead = _ringBufferTail = 0;
 }
