@@ -33,7 +33,7 @@ setup()
 
 loop() 
 {
-    sensor.readUART();
+    sensor.proessSerialMessages();
 }
 ```
 
