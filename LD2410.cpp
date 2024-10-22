@@ -128,6 +128,59 @@ void LD2410::printSerialMessage()
     }
 }
 
+void LD2410::processAckFrame()
+{
+    uint16_t command = _radar_data_frame[6] | (_radar_data_frame[7] << 8);
+    uint16_t status = _radar_data_frame[9] | (_radar_data_frame[10] << 8);
+
+    switch (command)
+    {
+    }
+}
+
+void LD2410::processSensorDataFrame()
+{
+    // 0x01 --> Engineering mode
+    // 0x02 --> Basic target information
+
+    if (_radar_data_frame[6] == 0x02 || _radar_data_frame[6] == 0x01)
+    {
+        // Check if the data header of the intra-frame data is valid
+        if (_radar_data_frame[7] == 0xAA)
+        {
+            // Basic target information
+            _target_state = _radar_data_frame[8];
+            _moving_target_distance = _radar_data_frame[9] | (_radar_data_frame[10] << 8);
+            _moving_target_energy = _radar_data_frame[11];
+            _stationary_target_distance = _radar_data_frame[12] | (_radar_data_frame[13] << 8);
+            _stationary_target_energy = _radar_data_frame[14];
+            _detection_distance = _radar_data_frame[15] | (_radar_data_frame[16] << 8);
+
+            // Engineering mode additional data
+            if (_radar_data_frame[6] == 0x01)
+            {
+                _max_moving_gate = _radar_data_frame[17];
+                _max_stationary_gate = _radar_data_frame[18];
+
+                // Process moving target energy gates
+                for (int i = 0; i < 9; i++)
+                {
+                    _moving_energy_gates[i] = _radar_data_frame[19 + i];
+                }
+
+                // Process stationary target energy gates
+                for (int i = 0; i < 9; i++)
+                {
+                    _stationary_energy_gates[i] = _radar_data_frame[28 + i];
+                }
+
+                _light_sensor_value = _radar_data_frame[37];
+                _out_pin_state = _radar_data_frame[38] == 0x01;
+            }
+        }
+    }
+}
+
 void LD2410::proessSerialMessages()
 {
     bool new_data = false;
@@ -142,7 +195,14 @@ void LD2410::proessSerialMessages()
     {
         if (readFrame())
         {
-            // ToDo
+            if (_ack_frame)
+            {
+                processAckFrame();
+            }
+            else
+            {
+                processSensorDataFrame();
+            }
         }
     }
 }
