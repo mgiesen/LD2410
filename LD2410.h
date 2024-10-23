@@ -15,7 +15,7 @@ public:
     bool beginOutputObservation(uint8_t pin, void (*callback)(bool), uint8_t pin_mode_option = INPUT);
 
     bool beginUART(uint8_t ld2410_rx_pin, uint8_t ld2410_tx_pin, HardwareSerial &serial, unsigned long baud = 256000);
-    void proessSerialMessages();
+    void processSerialMessages();
     void printSerialMessage();
 
     bool isEngineeringMode() const { return _is_engineering_mode; }

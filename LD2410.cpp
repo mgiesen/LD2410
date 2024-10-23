@@ -128,6 +128,32 @@ void LD2410::printSerialMessage()
     }
 }
 
+void LD2410::processSerialMessages()
+{
+    bool new_data = false;
+
+    while (_serial->available())
+    {
+        addToBuffer(_serial->read());
+        new_data = true;
+    }
+
+    if (new_data)
+    {
+        if (readFrame())
+        {
+            if (_ack_frame)
+            {
+                processAckFrame();
+            }
+            else
+            {
+                processSensorDataFrame();
+            }
+        }
+    }
+}
+
 void LD2410::processAckFrame()
 {
     uint16_t command = _radar_data_frame[6] | (_radar_data_frame[7] << 8);
@@ -176,32 +202,6 @@ void LD2410::processSensorDataFrame()
 
                 _light_sensor_value = _radar_data_frame[37];
                 _out_pin_state = _radar_data_frame[38] == 0x01;
-            }
-        }
-    }
-}
-
-void LD2410::proessSerialMessages()
-{
-    bool new_data = false;
-
-    while (_serial->available())
-    {
-        addToBuffer(_serial->read());
-        new_data = true;
-    }
-
-    if (new_data)
-    {
-        if (readFrame())
-        {
-            if (_ack_frame)
-            {
-                processAckFrame();
-            }
-            else
-            {
-                processSensorDataFrame();
             }
         }
     }
