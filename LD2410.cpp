@@ -109,104 +109,6 @@ bool LD2410::beginUART(uint8_t ld2410_rx_pin, uint8_t ld2410_tx_pin, HardwareSer
     }
 }
 
-void LD2410::printSerialMessage()
-{
-    bool new_data = false;
-
-    while (_serial->available())
-    {
-        addToBuffer(_serial->read());
-        new_data = true;
-    }
-
-    if (new_data)
-    {
-        if (readFrame())
-        {
-            debugPrintBuffer("[LD2410] Received frame: ", _radar_data_frame, _radar_data_frame_position);
-        }
-    }
-}
-
-void LD2410::processSerialMessages()
-{
-    bool new_data = false;
-
-    while (_serial->available())
-    {
-        addToBuffer(_serial->read());
-        new_data = true;
-    }
-
-    if (new_data)
-    {
-        if (readFrame())
-        {
-            if (_ack_frame)
-            {
-                processAckFrame();
-            }
-            else
-            {
-                processSensorDataFrame();
-            }
-        }
-    }
-}
-
-void LD2410::processAckFrame()
-{
-    uint16_t command = _radar_data_frame[6] | (_radar_data_frame[7] << 8);
-    uint16_t status = _radar_data_frame[9] | (_radar_data_frame[10] << 8);
-
-    switch (command)
-    {
-    }
-}
-
-void LD2410::processSensorDataFrame()
-{
-    // 0x01 --> Engineering mode
-    // 0x02 --> Basic target information
-
-    if (_radar_data_frame[6] == 0x02 || _radar_data_frame[6] == 0x01)
-    {
-        // Check if the data header of the intra-frame data is valid
-        if (_radar_data_frame[7] == 0xAA)
-        {
-            // Basic target information
-            _target_state = _radar_data_frame[8];
-            _moving_target_distance = _radar_data_frame[9] | (_radar_data_frame[10] << 8);
-            _moving_target_energy = _radar_data_frame[11];
-            _stationary_target_distance = _radar_data_frame[12] | (_radar_data_frame[13] << 8);
-            _stationary_target_energy = _radar_data_frame[14];
-            _detection_distance = _radar_data_frame[15] | (_radar_data_frame[16] << 8);
-
-            // Engineering mode additional data
-            if (_radar_data_frame[6] == 0x01)
-            {
-                _max_moving_gate = _radar_data_frame[17];
-                _max_stationary_gate = _radar_data_frame[18];
-
-                // Process moving target energy gates
-                for (int i = 0; i < 9; i++)
-                {
-                    _moving_energy_gates[i] = _radar_data_frame[19 + i];
-                }
-
-                // Process stationary target energy gates
-                for (int i = 0; i < 9; i++)
-                {
-                    _stationary_energy_gates[i] = _radar_data_frame[28 + i];
-                }
-
-                _light_sensor_value = _radar_data_frame[37];
-                _out_pin_state = _radar_data_frame[38] == 0x01;
-            }
-        }
-    }
-}
-
 void LD2410::addToBuffer(uint8_t byte)
 {
     _circular_buffer[_buffer_head] = byte;
@@ -314,4 +216,234 @@ bool LD2410::readFrame()
         }
     }
     return false;
+}
+
+void LD2410::printSerialMessage()
+{
+    bool new_data = false;
+
+    while (_serial->available())
+    {
+        addToBuffer(_serial->read());
+        new_data = true;
+    }
+
+    if (new_data)
+    {
+        if (readFrame())
+        {
+            debugPrintBuffer("[LD2410] Received frame: ", _radar_data_frame, _radar_data_frame_position);
+        }
+    }
+}
+
+void LD2410::processAckFrame()
+{
+    uint16_t command = _radar_data_frame[6] | (_radar_data_frame[7] << 8);
+    uint16_t status = _radar_data_frame[9] | (_radar_data_frame[10] << 8);
+
+    switch (command)
+    {
+    }
+}
+
+void LD2410::processSensorDataFrame()
+{
+    // 0x01 --> Engineering mode
+    // 0x02 --> Basic target information
+
+    _is_engineering_mode = _radar_data_frame[6] == 0x01;
+
+    if (_is_engineering_mode || _radar_data_frame[6] == 0x02)
+    {
+        // Check if the data header of the intra-frame data is valid
+        if (_radar_data_frame[7] == 0xAA)
+        {
+            // Basic target information
+            _target_state = _radar_data_frame[8];
+            _moving_target_distance = _radar_data_frame[9] | (_radar_data_frame[10] << 8);
+            _moving_target_energy = _radar_data_frame[11];
+            _stationary_target_distance = _radar_data_frame[12] | (_radar_data_frame[13] << 8);
+            _stationary_target_energy = _radar_data_frame[14];
+            _detection_distance = _radar_data_frame[15] | (_radar_data_frame[16] << 8);
+
+            // Engineering mode additional data
+            if (_is_engineering_mode)
+            {
+                _max_moving_gate = _radar_data_frame[17];
+                _max_stationary_gate = _radar_data_frame[18];
+
+                // Process moving target energy gates
+                for (int i = 0; i < 9; i++)
+                {
+                    _moving_energy_gates[i] = _radar_data_frame[19 + i];
+                }
+
+                // Process stationary target energy gates
+                for (int i = 0; i < 9; i++)
+                {
+                    _stationary_energy_gates[i] = _radar_data_frame[28 + i];
+                }
+
+                _light_sensor_value = _radar_data_frame[37];
+                _out_pin_state = _radar_data_frame[38] == 0x01;
+            }
+        }
+    }
+}
+
+void LD2410::processSerialMessages()
+{
+    bool new_data = false;
+
+    while (_serial->available())
+    {
+        addToBuffer(_serial->read());
+        new_data = true;
+    }
+
+    if (new_data)
+    {
+        if (readFrame())
+        {
+            if (_ack_frame)
+            {
+                processAckFrame();
+            }
+            else
+            {
+                processSensorDataFrame();
+            }
+        }
+    }
+}
+
+bool LD2410::sendCommand(const uint8_t *cmd, size_t length)
+{
+    // Send header
+    const uint8_t header[] = {0xFD, 0xFC, 0xFB, 0xFA};
+    _serial->write(header, 4);
+
+    // Send command
+    _serial->write(cmd, length);
+
+    // Send tail
+    const uint8_t tail[] = {0x04, 0x03, 0x02, 0x01};
+    _serial->write(tail, 4);
+
+    _serial->flush();
+
+    unsigned long timeout = millis() + 1000;
+    while (millis() < timeout)
+    {
+        processSerialMessages();
+        delay(10);
+        return true; // To-Do: Implement ACK verification
+    }
+    return false;
+}
+
+bool LD2410::enterConfigMode()
+{
+    const uint8_t cmd[] = {0x04, 0x00, 0xFF, 0x00, 0x01, 0x00};
+    return sendCommand(cmd, sizeof(cmd));
+}
+
+bool LD2410::exitConfigMode()
+{
+    const uint8_t cmd[] = {0x02, 0x00, 0xFE, 0x00};
+    return sendCommand(cmd, sizeof(cmd));
+}
+
+bool LD2410::enableEngineeringMode()
+{
+    if (!enterConfigMode())
+    {
+        return false;
+    }
+
+    delay(50);
+
+    const uint8_t cmd[] = {0x02, 0x00, 0x62, 0x00};
+    bool success = sendCommand(cmd, sizeof(cmd));
+
+    delay(50);
+    exitConfigMode();
+    return success;
+}
+
+bool LD2410::disableEngineeringMode()
+{
+    if (!enterConfigMode())
+    {
+        return false;
+    }
+
+    delay(50);
+
+    const uint8_t cmd[] = {0x02, 0x00, 0x63, 0x00};
+    bool success = sendCommand(cmd, sizeof(cmd));
+
+    delay(50);
+    exitConfigMode();
+    return success;
+}
+
+void LD2410::prettyPrintData(Stream &output)
+{
+    output.println();
+    output.println("--------------------------------------------------");
+    output.println("[LD2410] Sensor Data");
+    output.println("--------------------------------------------------");
+    output.println();
+    output.print("\tTarget State: ");
+    output.println(_target_state);
+
+    output.print("\tMoving Target - Distance: ");
+    output.print(_moving_target_distance);
+    output.print(" cm, Energy: ");
+    output.println(_moving_target_energy);
+
+    output.print("\tStationary Target - Distance: ");
+    output.print(_stationary_target_distance);
+    output.print(" cm, Energy: ");
+    output.println(_stationary_target_energy);
+
+    output.print("\tDetection Distance: ");
+    output.print(_detection_distance);
+    output.println(" cm");
+
+    // Engineering Mode
+    if (_radar_data_frame[6] == 0x01)
+    {
+        output.println();
+        output.println("\tMoving Energy Gates:");
+        for (int i = 0; i < 9; i++)
+        {
+            output.print("\tGate ");
+            output.print(i);
+            output.print(": ");
+            output.println(_moving_energy_gates[i]);
+        }
+
+        output.println();
+        output.println("\tStationary Energy Gates:");
+        for (int i = 0; i < 9; i++)
+        {
+            output.print("\tGate ");
+            output.print(i);
+            output.print(": ");
+            output.println(_stationary_energy_gates[i]);
+        }
+
+        output.println();
+        output.print("\tLight Sensor Value: ");
+        output.println(_light_sensor_value);
+        output.print("\tOutput Pin State: ");
+        output.println(_out_pin_state ? "HIGH" : "LOW");
+    }
+
+    output.println();
+    output.println("--------------------------------------------------");
+    output.println();
 }

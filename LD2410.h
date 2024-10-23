@@ -10,15 +10,14 @@ class LD2410
 {
 public:
     LD2410();
+
+    // Setup functions
     void useDebug(Stream &debug_serial);
-
     bool beginOutputObservation(uint8_t pin, void (*callback)(bool), uint8_t pin_mode_option = INPUT);
-
     bool beginUART(uint8_t ld2410_rx_pin, uint8_t ld2410_tx_pin, HardwareSerial &serial, unsigned long baud = 256000);
-    void processSerialMessages();
-    void printSerialMessage();
 
-    bool isEngineeringMode() const { return _is_engineering_mode; }
+    // Loop functions
+    void processSerialMessages();
 
     // Basic target information
     uint8_t getTargetState() const { return _target_state; }
@@ -35,6 +34,15 @@ public:
     uint8_t getStationaryEnergyGate(uint8_t gate) const { return gate < 9 ? _stationary_energy_gates[gate] : 0; }
     uint8_t getLightSensorValue() const { return _light_sensor_value; }
     bool getOutPinState() const { return _out_pin_state; }
+    bool isEngineeringMode() const { return _is_engineering_mode; }
+
+    // Commands
+    bool enableEngineeringMode();
+    bool disableEngineeringMode();
+
+    // Debugging
+    void prettyPrintData(Stream &output);
+    void printSerialMessage();
 
 private:
     //-------------------------------------------------------------------------------------------------
@@ -105,6 +113,14 @@ private:
     uint8_t _digital_output_pin;
     void (*_output_callback)(bool);
     static void IRAM_ATTR digitalOutputInterrupt(void *arg);
+
+    //-------------------------------------------------------------------------------------------------
+    // Commands
+    //-------------------------------------------------------------------------------------------------
+
+    bool sendCommand(const uint8_t *cmd, size_t length);
+    bool enterConfigMode();
+    bool exitConfigMode();
 };
 
 #endif // LD2410_H
