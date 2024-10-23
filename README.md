@@ -33,7 +33,7 @@ setup()
 
 loop() 
 {
-    sensor.proessSerialMessages();
+    sensor.processSerialMessages();
 }
 ```
 
