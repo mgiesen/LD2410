@@ -17,9 +17,9 @@ public:
     bool beginUART(uint8_t ld2410_rx_pin, uint8_t ld2410_tx_pin, HardwareSerial &serial, unsigned long baud = 256000);
 
     // Loop functions
-    void processSerialMessages();
+    void processUART();
 
-    // Basic target information
+    // Basic target information Getter
     uint8_t getTargetState() const { return _target_state; }
     uint16_t getMovingTargetDistance() const { return _moving_target_distance; }
     uint8_t getMovingTargetEnergy() const { return _moving_target_energy; }
@@ -27,7 +27,7 @@ public:
     uint8_t getStationaryTargetEnergy() const { return _stationary_target_energy; }
     uint16_t getDetectionDistance() const { return _detection_distance; }
 
-    // Engineering mode additional data
+    // Engineering mode additional data Getter
     uint8_t getMaxMovingGate() const { return _max_moving_gate; }
     uint8_t getMaxStationaryGate() const { return _max_stationary_gate; }
     uint8_t getMovingEnergyGate(uint8_t gate) const { return gate < 9 ? _moving_energy_gates[gate] : 0; }
@@ -36,13 +36,36 @@ public:
     bool getOutPinState() const { return _out_pin_state; }
     bool isEngineeringMode() const { return _is_engineering_mode; }
 
-    // Commands
+    // Debugging
+    void prettyPrintData(Stream &output);
+
+    // Commands Setter and Getter
     bool enableEngineeringMode();
     bool disableEngineeringMode();
 
-    // Debugging
-    void prettyPrintData(Stream &output);
-    void printSerialMessage();
+    // TO-DO: Basic Configuration Commands
+    // bool setMaxDistanceGateAndDuration(uint8_t maxMovingGate, uint8_t maxStationaryGate, uint16_t unoccupiedDuration); // 0x0060
+    // bool readParameters();                                                                                             // 0x0061
+    // bool setDistanceGateSensitivity(uint8_t gate, uint8_t movingSensitivity, uint8_t stationarySensitivity);           // 0x0064
+
+    // TO-DO: System Commands
+    // bool readFirmwareVersion();                // 0x00A0
+    // bool setSerialBaudRate(uint32_t baudRate); // 0x00A1
+    // bool restoreFactorySettings();             // 0x00A2
+    // bool restart();                            // 0x00A3
+
+    // TO-DO: Bluetooth Related Commands
+    // bool setBluetoothState(bool enabled);            // 0x00A4
+    // bool getMacAddress();                            // 0x00A5
+    // bool getBluetoothPermissions();                  // 0x00A8
+    // bool setBluetoothPassword(const char *password); // 0x00A9
+
+    // TO-DO: Resolution & Control Commands
+    // bool activatePreciseDistanceMode(); // Switches LD2410 to 0,2m resolution (0x01)
+    // bool activateExtendedRangeMode(); // Switches LD2410 to 0,75m resolution (0x00)
+    // bool queryDistanceResolution();                                             // 0x00AB
+    // bool setAuxiliaryControl(uint8_t mode, uint8_t threshold, bool defaultLow); // 0x00AD
+    // bool queryAuxiliaryControl();                                               // 0x00AE
 
 private:
     //-------------------------------------------------------------------------------------------------
@@ -70,13 +93,6 @@ private:
     bool _out_pin_state;
 
     //-------------------------------------------------------------------------------------------------
-    // Frame Processing
-    //-------------------------------------------------------------------------------------------------
-
-    void processAckFrame();
-    void processSensorDataFrame();
-
-    //-------------------------------------------------------------------------------------------------
     // UART
     //-------------------------------------------------------------------------------------------------
 
@@ -90,12 +106,14 @@ private:
     uint16_t _radar_data_frame_position = 0;
     bool _frame_started = false;
     bool _ack_frame = false;
+    uint32_t _radar_uart_last_command_ = 0;
 
     void addToBuffer(uint8_t byte);
     bool readFromBuffer(uint8_t &byte);
     bool findFrameStart();
     bool checkFrameEnd();
     bool readFrame();
+    void parseSensorDataFromFrame();
 
     //-------------------------------------------------------------------------------------------------
     // Debugging
@@ -104,7 +122,6 @@ private:
     Stream *_debug_serial;
     void debugPrint(const char *message) const;
     void debugPrintln(const char *message) const;
-    void debugPrintBuffer(const char *messageHeader, const uint8_t *buffer, size_t length) const;
 
     //-------------------------------------------------------------------------------------------------
     // Output observation

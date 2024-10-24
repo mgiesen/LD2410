@@ -42,7 +42,7 @@ setup()
 
 loop() 
 {
-    sensor.processSerialMessages();
+    sensor.processUART();
 }
 ```
 

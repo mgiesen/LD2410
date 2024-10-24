@@ -33,18 +33,65 @@ void LD2410::debugPrintln(const char *message) const
     }
 }
 
-void LD2410::debugPrintBuffer(const char *messageHeader, const uint8_t *buffer, size_t length) const
+void LD2410::prettyPrintData(Stream &output)
 {
-    if (_debug_serial)
+    output.println();
+    output.println("--------------------------------------------------");
+    output.println("[LD2410] Sensor Data");
+    output.println("--------------------------------------------------");
+    output.println();
+    output.print("\tTarget State: ");
+    output.println(_target_state);
+    output.print("\tEngineering Mode: ");
+    output.println(_radar_data_frame[6] == 0x01 ? "Enabled" : "Disabled");
+
+    output.print("\tMoving Target - Distance: ");
+    output.print(_moving_target_distance);
+    output.print(" cm, Energy: ");
+    output.println(_moving_target_energy);
+
+    output.print("\tStationary Target - Distance: ");
+    output.print(_stationary_target_distance);
+    output.print(" cm, Energy: ");
+    output.println(_stationary_target_energy);
+
+    output.print("\tDetection Distance: ");
+    output.print(_detection_distance);
+    output.println(" cm");
+
+    // Engineering Mode
+    if (_radar_data_frame[6] == 0x01)
     {
-        _debug_serial->print(messageHeader);
-        for (size_t i = 0; i < length; i++)
+        output.println();
+        output.println("\tMoving Energy Gates:");
+        for (int i = 0; i < 9; i++)
         {
-            _debug_serial->print(buffer[i], HEX);
-            _debug_serial->print(" ");
+            output.print("\tGate ");
+            output.print(i);
+            output.print(": ");
+            output.println(_moving_energy_gates[i]);
         }
-        _debug_serial->println();
+
+        output.println();
+        output.println("\tStationary Energy Gates:");
+        for (int i = 0; i < 9; i++)
+        {
+            output.print("\tGate ");
+            output.print(i);
+            output.print(": ");
+            output.println(_stationary_energy_gates[i]);
+        }
+
+        output.println();
+        output.print("\tLight Sensor Value: ");
+        output.println(_light_sensor_value);
+        output.print("\tOutput Pin State: ");
+        output.println(_out_pin_state ? "HIGH" : "LOW");
     }
+
+    output.println();
+    output.println("--------------------------------------------------");
+    output.println();
 }
 
 //=====================================================================================================================
@@ -80,7 +127,7 @@ void IRAM_ATTR LD2410::digitalOutputInterrupt(void *arg)
 }
 
 //=====================================================================================================================
-// UART COMMUNICATION
+// UART FRAME IDENTIFICATION
 //=====================================================================================================================
 
 bool LD2410::beginUART(uint8_t ld2410_rx_pin, uint8_t ld2410_tx_pin, HardwareSerial &serial, unsigned long baud)
@@ -218,7 +265,11 @@ bool LD2410::readFrame()
     return false;
 }
 
-void LD2410::printSerialMessage()
+//=====================================================================================================================
+// UART FRAME PROCESSING
+//=====================================================================================================================
+
+void LD2410::processUART()
 {
     bool new_data = false;
 
@@ -232,22 +283,15 @@ void LD2410::printSerialMessage()
     {
         if (readFrame())
         {
-            debugPrintBuffer("[LD2410] Received frame: ", _radar_data_frame, _radar_data_frame_position);
+            if (_ack_frame == false)
+            {
+                parseSensorDataFromFrame();
+            }
         }
     }
 }
 
-void LD2410::processAckFrame()
-{
-    uint16_t command = _radar_data_frame[6] | (_radar_data_frame[7] << 8);
-    uint16_t status = _radar_data_frame[9] | (_radar_data_frame[10] << 8);
-
-    switch (command)
-    {
-    }
-}
-
-void LD2410::processSensorDataFrame()
+void LD2410::parseSensorDataFromFrame()
 {
     // 0x01 --> Engineering mode
     // 0x02 --> Basic target information
@@ -292,31 +336,9 @@ void LD2410::processSensorDataFrame()
     }
 }
 
-void LD2410::processSerialMessages()
-{
-    bool new_data = false;
-
-    while (_serial->available())
-    {
-        addToBuffer(_serial->read());
-        new_data = true;
-    }
-
-    if (new_data)
-    {
-        if (readFrame())
-        {
-            if (_ack_frame)
-            {
-                processAckFrame();
-            }
-            else
-            {
-                processSensorDataFrame();
-            }
-        }
-    }
-}
+//=====================================================================================================================
+// UART COMMAND PROCESSING
+//=====================================================================================================================
 
 bool LD2410::sendCommand(const uint8_t *cmd, size_t length)
 {
@@ -333,15 +355,36 @@ bool LD2410::sendCommand(const uint8_t *cmd, size_t length)
 
     _serial->flush();
 
-    unsigned long timeout = millis() + 1000;
-    while (millis() < timeout)
+    // Extract command word from cmd array (at position 2,3 after length bytes)
+    uint16_t expectedCommand = (cmd[3] << 8) | cmd[2];
+    uint16_t expectedAckCommand = expectedCommand | 0x0100;
+
+    unsigned long startTime = millis();
+
+    // Wait for response
+    while (millis() - startTime < 1000)
     {
-        processSerialMessages();
-        delay(10);
-        return true; // To-Do: Implement ACK verification
+        processUART();
+        if (_ack_frame)
+        {
+            uint16_t receivedCommand = (_radar_data_frame[7] << 8) | _radar_data_frame[6];
+
+            if (receivedCommand == expectedAckCommand)
+            {
+                uint16_t status = (_radar_data_frame[9] << 8) | _radar_data_frame[8];
+                return status == 0;
+            }
+            return false;
+        }
     }
+
+    debugPrintln("[LD2410] Command timed out");
     return false;
 }
+
+//=====================================================================================================================
+// UART COMMANDS
+//=====================================================================================================================
 
 bool LD2410::enterConfigMode()
 {
@@ -359,16 +402,21 @@ bool LD2410::enableEngineeringMode()
 {
     if (!enterConfigMode())
     {
+        debugPrintln("[LD2410] Failed to enter config mode");
         return false;
     }
 
-    delay(50);
+    delay(1000);
 
     const uint8_t cmd[] = {0x02, 0x00, 0x62, 0x00};
     bool success = sendCommand(cmd, sizeof(cmd));
 
-    delay(50);
-    exitConfigMode();
+    delay(1000);
+
+    if (!exitConfigMode())
+    {
+        debugPrintln("[LD2410] Failed to exit config mode");
+    }
     return success;
 }
 
@@ -376,74 +424,20 @@ bool LD2410::disableEngineeringMode()
 {
     if (!enterConfigMode())
     {
+        debugPrintln("[LD2410] Failed to enter config mode");
         return false;
     }
 
-    delay(50);
+    delay(1000);
 
     const uint8_t cmd[] = {0x02, 0x00, 0x63, 0x00};
-    bool success = sendCommand(cmd, sizeof(cmd));
+    sendCommand(cmd, sizeof(cmd));
 
-    delay(50);
-    exitConfigMode();
-    return success;
-}
+    delay(1000);
 
-void LD2410::prettyPrintData(Stream &output)
-{
-    output.println();
-    output.println("--------------------------------------------------");
-    output.println("[LD2410] Sensor Data");
-    output.println("--------------------------------------------------");
-    output.println();
-    output.print("\tTarget State: ");
-    output.println(_target_state);
-
-    output.print("\tMoving Target - Distance: ");
-    output.print(_moving_target_distance);
-    output.print(" cm, Energy: ");
-    output.println(_moving_target_energy);
-
-    output.print("\tStationary Target - Distance: ");
-    output.print(_stationary_target_distance);
-    output.print(" cm, Energy: ");
-    output.println(_stationary_target_energy);
-
-    output.print("\tDetection Distance: ");
-    output.print(_detection_distance);
-    output.println(" cm");
-
-    // Engineering Mode
-    if (_radar_data_frame[6] == 0x01)
+    if (!exitConfigMode())
     {
-        output.println();
-        output.println("\tMoving Energy Gates:");
-        for (int i = 0; i < 9; i++)
-        {
-            output.print("\tGate ");
-            output.print(i);
-            output.print(": ");
-            output.println(_moving_energy_gates[i]);
-        }
-
-        output.println();
-        output.println("\tStationary Energy Gates:");
-        for (int i = 0; i < 9; i++)
-        {
-            output.print("\tGate ");
-            output.print(i);
-            output.print(": ");
-            output.println(_stationary_energy_gates[i]);
-        }
-
-        output.println();
-        output.print("\tLight Sensor Value: ");
-        output.println(_light_sensor_value);
-        output.print("\tOutput Pin State: ");
-        output.println(_out_pin_state ? "HIGH" : "LOW");
+        debugPrintln("[LD2410] Failed to exit config mode");
     }
-
-    output.println();
-    output.println("--------------------------------------------------");
-    output.println();
+    return true;
 }
