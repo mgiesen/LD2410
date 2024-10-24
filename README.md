@@ -21,6 +21,11 @@ A lightweight library for the LD2410 sensor, enabling easy UART communication an
 
 ## Usage
 
+**Initialization**  
+```cpp
+LD2410 sensor;
+```
+
 **Debugging**  
 ```cpp
 Serial.begin(115200);
@@ -32,7 +37,6 @@ sensor.useDebug(Serial);
 ```cpp
 setup() 
 {
-    LD2410 sensor;
     sensor.beginUART(rxPin, txPin, Serial2, 256000); 
 }
 
