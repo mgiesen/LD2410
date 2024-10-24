@@ -14,6 +14,11 @@ A lightweight library for the LD2410 sensor, enabling easy UART communication an
 ## Pinout
 ![ld2410_pinout.png](/readme/ld2410_pinout.png)
 
+## Documentation
+
+- [Manual EN](docu/Manual.pdf)
+- [Serial Communication EN](docu/Serial%20Communication.pdf)
+
 ## Usage
 
 **Debugging**  
