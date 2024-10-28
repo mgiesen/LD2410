@@ -1,4 +1,14 @@
-// LD2410.cpp
+/*
+ * LD2410.cpp
+ *
+ * Author: Maximilian Giesen
+ * Version: UNRELEASED 
+ * Repository: https://github.com/mgiesen/ld2410
+ * 
+ * A lightweight library for the HiLink HLK-LD2410 sensor, enabling easy UART communication 
+ * and efficient monitoring of sensor output with minimal overhead.
+ */
+
 #include "LD2410.h"
 
 LD2410::LD2410() : _debug_serial(nullptr),
