@@ -74,15 +74,15 @@ setup()
 ## Command Frame
 
 ```
-HEADER        LENGTH   DATA       FOOTER
+HEADER        LENGTH   DATA        FOOTER
 FD FC FB FA   XX XX    [payload]   04 03 02 01
 ```
 
 ### Data Frame
 
 ```
-HEADER        LENGTH   DATA       FOOTER
-F4 F3 F2 F1   XX XX    [payload]  F8 F7 F6 F5
+HEADER        LENGTH   DATA        FOOTER
+F4 F3 F2 F1   XX XX    [payload]   F8 F7 F6 F5
 ```
 
 ## Target States
@@ -111,7 +111,7 @@ F4 F3 F2 F1   XX XX    [payload]  F8 F7 F6 F5
 
 ## Engineering Mode Data
 
-Adds per-gate energy values (0-100) to standard frame:
+Adds additional information to standard frame:
 
 - Moving target energy per gate
 - Stationary target energy per gate
