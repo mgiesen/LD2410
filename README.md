@@ -3,7 +3,7 @@
 A lightweight library for the LD2410 sensor, enabling easy UART communication and efficient monitoring of sensor output with minimal overhead.
 
 > [!WARNING]  
-> This library is currently under development and not yet ready for production use
+> This library is currently under development and is not yet ready for production use. The API may change frequently until the stable release.
 
 ## Features
 
