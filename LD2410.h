@@ -1,143 +1,183 @@
+// LD2410.h
 #ifndef LD2410_H
 #define LD2410_H
 
 #include <Arduino.h>
 
+// Protocol Constants
 #define LD2410_BUFFER_SIZE 1024
 #define LD2410_MAX_FRAME_LENGTH 1024
+#define LD2410_COMMAND_TIMEOUT 1000
+#define LD2410_COMMAND_DELAY 100
+
+// Distance Gates
+#define LD2410_MAX_GATES 8
+#define LD2410_MAX_DISTANCE_075M (LD2410_MAX_GATES * 75) // cm with 0.75m resolution
+#define LD2410_MAX_DISTANCE_020M (LD2410_MAX_GATES * 20) // cm with 0.20m resolution
+
+// Sensitivity Ranges
+#define LD2410_MIN_SENSITIVITY 0
+#define LD2410_MAX_SENSITIVITY 100
 
 class LD2410
 {
 public:
+    // Error states
+    enum class Error
+    {
+        NONE = 0,
+        BUFFER_OVERFLOW,
+        INVALID_FRAME,
+        COMMAND_FAILED,
+        INVALID_PARAMETER,
+        TIMEOUT,
+        NOT_INITIALIZED
+    };
+
+    // Target states as defined in protocol
+    enum class TargetState
+    {
+        NO_TARGET = 0x00,
+        MOVING = 0x01,
+        STATIONARY = 0x02,
+        MOVING_AND_STATIONARY = 0x03
+    };
+
+    struct SensorData
+    {
+        TargetState targetState;
+        uint16_t movingTargetDistance;     // in cm
+        uint8_t movingTargetEnergy;        // 0-100
+        uint16_t stationaryTargetDistance; // in cm
+        uint8_t stationaryTargetEnergy;    // 0-100
+        uint16_t detectionDistance;        // in cm
+        uint8_t lightSensorValue;          // 0-255
+        bool outPinState;                  // true = occupied
+    };
+
+    struct EngineeringData : public SensorData
+    {
+        uint8_t maxMovingGate;
+        uint8_t maxStationaryGate;
+        uint8_t movingEnergyGates[LD2410_MAX_GATES];
+        uint8_t stationaryEnergyGates[LD2410_MAX_GATES];
+    };
+
     LD2410();
 
     // Setup functions
-    void useDebug(Stream &debug_serial);
-    bool beginOutputObservation(uint8_t pin, void (*callback)(bool), uint8_t pin_mode_option = INPUT);
     bool beginUART(uint8_t ld2410_rx_pin, uint8_t ld2410_tx_pin, HardwareSerial &serial, unsigned long baud = 256000);
+    bool beginOutputObservation(uint8_t pin, void (*callback)(bool), uint8_t pin_mode_option);
+    void useDebug(Stream &debugSerial);
+    Error getLastError() const { return _lastError; }
+    const char *getErrorString() const;
 
-    // Loop functions
+    // Main Loop
     void processUART();
 
-    // Basic target information Getter
-    uint8_t getTargetState() const { return _target_state; }
-    uint16_t getMovingTargetDistance() const { return _moving_target_distance; }
-    uint8_t getMovingTargetEnergy() const { return _moving_target_energy; }
-    uint16_t getStationaryTargetDistance() const { return _stationary_target_distance; }
-    uint8_t getStationaryTargetEnergy() const { return _stationary_target_energy; }
-    uint16_t getDetectionDistance() const { return _detection_distance; }
-
-    // Engineering mode additional data Getter
-    uint8_t getMaxMovingGate() const { return _max_moving_gate; }
-    uint8_t getMaxStationaryGate() const { return _max_stationary_gate; }
-    uint8_t getMovingEnergyGate(uint8_t gate) const { return gate < 9 ? _moving_energy_gates[gate] : 0; }
-    uint8_t getStationaryEnergyGate(uint8_t gate) const { return gate < 9 ? _stationary_energy_gates[gate] : 0; }
-    uint8_t getLightSensorValue() const { return _light_sensor_value; }
-    bool getOutPinState() const { return _out_pin_state; }
-    bool isEngineeringMode() const { return _is_engineering_mode; }
-
-    // Debugging
-    void prettyPrintData(Stream &output);
-
-    // Commands Setter and Getter
+    // Basic configuration
+    bool setMaxValues(uint8_t movingGate, uint8_t stationaryGate, uint16_t timeout);
+    bool setGateSensitivityThreshold(uint8_t gate, uint8_t moving, uint8_t stationary);
     bool enableEngineeringMode();
     bool disableEngineeringMode();
 
-    // TO-DO: Basic Configuration Commands
-    // bool setMaxDistanceGateAndDuration(uint8_t maxMovingGate, uint8_t maxStationaryGate, uint16_t unoccupiedDuration); // 0x0060
-    // bool readParameters();                                                                                             // 0x0061
-    // bool setDistanceGateSensitivity(uint8_t gate, uint8_t movingSensitivity, uint8_t stationarySensitivity);           // 0x0064
+    // Advanced configuration
+    bool setBaudRate(unsigned long baudRate);
+    bool setDistanceResolution(bool use020mResolution);
+    bool factoryReset();
+    bool restart();
 
-    // TO-DO: System Commands
-    // bool readFirmwareVersion();                // 0x00A0
-    // bool setSerialBaudRate(uint32_t baudRate); // 0x00A1
-    // bool restoreFactorySettings();             // 0x00A2
-    // bool restart();                            // 0x00A3
+    // Data access
+    const SensorData &getCurrentData() const { return _currentData; }
+    const EngineeringData &getEngineeringData() const { return _engineeringData; }
 
-    // TO-DO: Bluetooth Related Commands
-    // bool setBluetoothState(bool enabled);            // 0x00A4
-    // bool getMacAddress();                            // 0x00A5
-    // bool getBluetoothPermissions();                  // 0x00A8
-    // bool setBluetoothPassword(const char *password); // 0x00A9
-
-    // TO-DO: Resolution & Control Commands
-    // bool activatePreciseDistanceMode(); // Switches LD2410 to 0,2m resolution (0x01)
-    // bool activateExtendedRangeMode(); // Switches LD2410 to 0,75m resolution (0x00)
-    // bool queryDistanceResolution();                                             // 0x00AB
-    // bool setAuxiliaryControl(uint8_t mode, uint8_t threshold, bool defaultLow); // 0x00AD
-    // bool queryAuxiliaryControl();                                               // 0x00AE
+    // Utility functions
+    bool readConfiguration();
+    void prettyPrintData(Stream &output);
 
 private:
-    //-------------------------------------------------------------------------------------------------
-    // Singleton Setup
-    //-------------------------------------------------------------------------------------------------
+    // Output observation configuration
+    struct OutputObservation
+    {
+        uint8_t pin;
+        void (*callback)(bool);
+        bool started;
+        volatile bool lastState;
+    } _outputObservation;
 
-    static LD2410 *_instance;
+    // UART interface configuration
+    struct UARTInterface
+    {
+        HardwareSerial *serial;
+        bool initialized;
+        bool commandMode;
+        bool isEngineeringMode;
+        unsigned long lastCommandTime;
 
-    //-------------------------------------------------------------------------------------------------
-    // Sensor Data
-    //-------------------------------------------------------------------------------------------------
+        // Buffer management
+        uint8_t buffer[LD2410_BUFFER_SIZE];
+        uint16_t bufferHead;
+        uint16_t bufferTail;
 
-    uint8_t _target_state;
-    uint16_t _moving_target_distance;
-    uint8_t _moving_target_energy;
-    uint16_t _stationary_target_distance;
-    uint8_t _stationary_target_energy;
-    uint16_t _detection_distance;
-    bool _is_engineering_mode;
-    uint8_t _max_moving_gate;
-    uint8_t _max_stationary_gate;
-    uint8_t _moving_energy_gates[9];     // 0-8 gates
-    uint8_t _stationary_energy_gates[9]; // 0-8 gates
-    uint8_t _light_sensor_value;
-    bool _out_pin_state;
+        // Frame handling
+        uint8_t frame[LD2410_MAX_FRAME_LENGTH];
+        uint16_t framePosition;
+        bool frameStarted;
+        bool isAckFrame;
 
-    //-------------------------------------------------------------------------------------------------
-    // UART
-    //-------------------------------------------------------------------------------------------------
+        void init()
+        {
+            serial = nullptr;
+            initialized = false;
+            commandMode = false;
+            isEngineeringMode = false;
+            lastCommandTime = 0;
+            bufferHead = 0;
+            bufferTail = 0;
+            framePosition = 0;
+            frameStarted = false;
+            isAckFrame = false;
+        }
+    } _uart;
 
-    HardwareSerial *_serial;
-
-    uint8_t _circular_buffer[LD2410_BUFFER_SIZE];
-    uint16_t _buffer_head = 0;
-    uint16_t _buffer_tail = 0;
-
-    uint8_t _radar_data_frame[LD2410_MAX_FRAME_LENGTH];
-    uint16_t _radar_data_frame_position = 0;
-    bool _frame_started = false;
-    bool _ack_frame = false;
-    uint32_t _radar_uart_last_command_ = 0;
-
-    void addToBuffer(uint8_t byte);
-    bool readFromBuffer(uint8_t &byte);
-    bool findFrameStart();
-    bool checkFrameEnd();
-    bool readFrame();
-    void parseSensorDataFromFrame();
-
-    //-------------------------------------------------------------------------------------------------
-    // Debugging
-    //-------------------------------------------------------------------------------------------------
-
+    // Hardware interfaces
     Stream *_debug_serial;
-    void debugPrint(const char *message) const;
-    void debugPrintln(const char *message) const;
 
-    //-------------------------------------------------------------------------------------------------
+    // State management
+    Error _lastError;
+
+    // Data storage
+    SensorData _currentData;
+    EngineeringData _engineeringData;
+
     // Output observation
-    //-------------------------------------------------------------------------------------------------
-
-    uint8_t _digital_output_pin;
-    void (*_output_callback)(bool);
     static void IRAM_ATTR digitalOutputInterrupt(void *arg);
 
-    //-------------------------------------------------------------------------------------------------
-    // Commands
-    //-------------------------------------------------------------------------------------------------
-
+    // Internal functions
     bool sendCommand(const uint8_t *cmd, size_t length);
     bool enterConfigMode();
     bool exitConfigMode();
+    bool waitForAck(uint16_t expectedCommand);
+
+    // Buffer management
+    bool addToBuffer(uint8_t byte);
+    bool readFromBuffer(uint8_t &byte);
+    void clearBuffer();
+
+    // Frame handling
+    bool findFrameStart();
+    bool readFrame();
+    bool validateFrame();
+    void parseDataFrame();
+    bool parseCommandFrame(uint16_t expectedCommand);
+
+    // Utility functions
+    void debugPrint(const char *message);
+    void debugPrintln(const char *message);
+    void waitFor(unsigned long ms);
+    bool validateGate(uint8_t gate) const;
+    bool validateSensitivity(uint8_t sensitivity) const;
+    void setError(Error error);
 };
 
 #endif // LD2410_H

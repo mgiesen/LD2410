@@ -1,4 +1,5 @@
 # LD2410
+
 A lightweight library for the LD2410 sensor, enabling easy UART communication and efficient monitoring of sensor output with minimal overhead.
 
 > [!WARNING]  
@@ -11,7 +12,51 @@ A lightweight library for the LD2410 sensor, enabling easy UART communication an
 - Optional Debugging support via serial output
 - Ring buffer implementation for efficient serial data handling
 
+## Usage
+
+**Initialization**
+
+```cpp
+LD2410 sensor;
+```
+
+**Debugging**
+
+```cpp
+Serial.begin(115200);
+
+sensor.useDebug(Serial);
+```
+
+**UART Communication**
+
+```cpp
+setup()
+{
+    sensor.beginUART(rxPin, txPin, Serial2, 256000);
+}
+
+loop()
+{
+    sensor.processUART();
+}
+```
+
+**Output Observation**
+
+```cpp
+setup()
+{
+    void outputCallback(bool presenceDetected) {}
+
+    sensor.beginOutputObservation(pin, outputCallback);
+}
+```
+
+# Sensor
+
 ## Pinout
+
 ![ld2410_pinout.png](/readme/ld2410_pinout.png)
 
 ## Documentation
@@ -19,39 +64,56 @@ A lightweight library for the LD2410 sensor, enabling easy UART communication an
 - [Manual EN](docu/Manual.pdf)
 - [Serial Communication EN](docu/Serial%20Communication.pdf)
 
-## Usage
+## Default Configuration
 
-**Initialization**  
-```cpp
-LD2410 sensor;
+- UART: 256000 baud, 8N1 (1 stop bit, no parity)
+- Max Gates: 8 (Default max distance)
+- Default Resolution: 0.75m per gate
+- Timeout Duration: 5s
+
+## Command Frame
+
+```
+HEADER        LENGTH   DATA       FOOTER
+FD FC FB FA   XX XX    [payload]   04 03 02 01
 ```
 
-**Debugging**  
-```cpp
-Serial.begin(115200);
+### Data Frame
 
-sensor.useDebug(Serial);
+```
+HEADER        LENGTH   DATA       FOOTER
+F4 F3 F2 F1   XX XX    [payload]  F8 F7 F6 F5
 ```
 
-**UART Communication**  
-```cpp
-setup() 
-{
-    sensor.beginUART(rxPin, txPin, Serial2, 256000); 
-}
+## Target States
 
-loop() 
-{
-    sensor.processUART();
-}
-```
+- 0x00: No Target
+- 0x01: Moving Target
+- 0x02: Stationary Target
+- 0x03: Moving & Stationary
 
-**Output Observation**  
-```cpp
-setup() 
-{
-    void outputCallback(bool presenceDetected) {}
+## Default Sensitivity Settings
 
-    sensor.beginOutputObservation(pin, outputCallback);
-}
-```
+| Gate | Motion | Stationary |
+| ---- | ------ | ---------- |
+| 0,1  | 50     | N/A        |
+| 2    | 40     | 40         |
+| 3    | 30     | 40         |
+| 4    | 20     | 30         |
+| 5    | 15     | 30         |
+| 6-8  | 15     | 20         |
+
+## Protocol Rules
+
+1. All commands require Enable Config (0x00FF) first
+1. All commands must be followed by End Config (0x00FE)
+1. All multi-byte values are little-endian
+
+## Engineering Mode Data
+
+Adds per-gate energy values (0-100) to standard frame:
+
+- Moving target energy per gate
+- Stationary target energy per gate
+- Light sensor value (0-255)
+- OUT pin state
