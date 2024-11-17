@@ -2,10 +2,10 @@
  * LD2410.cpp
  *
  * Author: Maximilian Giesen
- * Version: UNRELEASED 
+ * Version: UNRELEASED
  * Repository: https://github.com/mgiesen/ld2410
- * 
- * A lightweight library for the HiLink HLK-LD2410 sensor, enabling easy UART communication 
+ *
+ * A lightweight library for the HiLink HLK-LD2410 sensor, enabling easy UART communication
  * and efficient monitoring of sensor output with minimal overhead.
  */
 
@@ -100,15 +100,15 @@ void IRAM_ATTR LD2410::digitalOutputInterrupt(void *arg)
 // UART INTERFACE
 //=====================================================================================================================
 
-bool LD2410::beginUART(uint8_t ld2410_rx_pin, uint8_t ld2410_tx_pin, HardwareSerial &serial, unsigned long baud)
+bool LD2410::beginUART(uint8_t esp32_rx_pin, uint8_t esp32_tx_pin, HardwareSerial &serial, unsigned long baud)
 {
     _uart.serial = &serial;
-    _uart.serial->begin(baud, SERIAL_8N1, ld2410_tx_pin, ld2410_rx_pin);
+    _uart.serial->begin(baud, SERIAL_8N1, esp32_rx_pin, esp32_tx_pin);
 
-    // Wait for serial to stabilize
+    // Wartezeit zum Stabilisieren der seriellen Verbindung
     delay(500);
 
-    // Try to read some data to verify connection
+    // Überprüfe, ob Daten verfügbar sind, um die Verbindung zu verifizieren
     unsigned long start = millis();
     while (millis() - start < 1000)
     {

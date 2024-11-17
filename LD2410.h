@@ -2,10 +2,10 @@
  * LD2410.h
  *
  * Author: Maximilian Giesen
- * Version: UNRELEASED 
+ * Version: UNRELEASED
  * Repository: https://github.com/mgiesen/ld2410
- * 
- * A lightweight library for the HiLink HLK-LD2410 sensor, enabling easy UART communication 
+ *
+ * A lightweight library for the HiLink HLK-LD2410 sensor, enabling easy UART communication
  * and efficient monitoring of sensor output with minimal overhead.
  */
 
@@ -76,7 +76,7 @@ public:
     LD2410();
 
     // Setup functions
-    bool beginUART(uint8_t ld2410_rx_pin, uint8_t ld2410_tx_pin, HardwareSerial &serial, unsigned long baud = 256000);
+    bool beginUART(uint8_t esp32_rx_pin, uint8_t esp32_tx_pin, HardwareSerial &serial, unsigned long baud = 256000);
     bool beginOutputObservation(uint8_t pin, void (*callback)(bool), uint8_t pin_mode_option);
     void useDebug(Stream &debugSerial);
     Error getLastError() const { return _lastError; }

@@ -33,7 +33,7 @@ sensor.useDebug(Serial);
 ```cpp
 setup()
 {
-    sensor.beginUART(rxPin, txPin, Serial2, 256000);
+    sensor.beginUART(ld2410txPin, ld2410rxPin, Serial2, 256000);
 }
 
 loop()
