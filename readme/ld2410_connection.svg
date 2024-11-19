@@ -1,0 +1,30 @@
+<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Boxes -->
+  <rect x="20" y="40" width="120" height="120" fill="#f0f0f0" stroke="#333" stroke-width="2"/>
+  <rect x="260" y="40" width="120" height="120" fill="#f0f0f0" stroke="#333" stroke-width="2"/>
+  
+  <!-- Labels inside boxes -->
+  <text x="35" y="100" text-anchor="start" dominant-baseline="middle" font-family="Arial" font-size="16" font-weight="bold">LD2410</text>
+  <text x="365" y="100" text-anchor="end" dominant-baseline="middle" font-family="Arial" font-size="16" font-weight="bold">MCU</text>
+  
+  <!-- Pins -->
+  <circle cx="140" cy="80" r="5" fill="#333"/>
+  <text x="125" y="85" text-anchor="end" font-family="Arial" font-size="14">TX</text>
+  
+  <circle cx="140" cy="120" r="5" fill="#333"/>
+  <text x="125" y="125" text-anchor="end" font-family="Arial" font-size="14">RX</text>
+  
+  <circle cx="260" cy="80" r="5" fill="#333"/>
+  <text x="275" y="85" text-anchor="start" font-family="Arial" font-size="14">RX</text>
+  
+  <circle cx="260" cy="120" r="5" fill="#333"/>
+  <text x="275" y="125" text-anchor="start" font-family="Arial" font-size="14">TX</text>
+  
+  <!-- Connection Lines -->
+  <path d="M 140 80 C 180 80, 220 80, 260 80" stroke="#ff6b6b" stroke-width="2" fill="none"/>
+  <path d="M 140 120 C 180 120, 220 120, 260 120" stroke="#4ecdc4" stroke-width="2" fill="none"/>
+  
+  <!-- Arrow Heads -->
+  <path d="M 250 76 L 260 80 L 250 84" stroke="#ff6b6b" stroke-width="2" fill="none"/>
+  <path d="M 150 116 L 140 120 L 150 124" stroke="#4ecdc4" stroke-width="2" fill="none"/>
+</svg>

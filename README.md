@@ -88,6 +88,10 @@ sensor.beginOutputObservation(pin, callback, pinMode);              // Start obs
 
 ![ld2410_pinout.png](/readme/ld2410_pinout.png)
 
+## Wiring
+
+![ld2410_connection.svg](/readme/ld2410_connection.svg)
+
 ## Documentation
 
 - [Manual EN](docu/Manual.pdf)
