@@ -108,13 +108,7 @@ When the LD2410 sensor operates in Engineering Mode, it transmits additional det
 **Frame Breakdown:**
 
 - **DATA**:
-  - **Basic Target Information (same as in Basic Mode)**:
-    - **Target State (1 byte)**: Indicates the detected target status.
-    - **Movement Target Distance (2 bytes)**: Distance to the moving target in centimeters.
-    - **Movement Target Energy (1 byte)**: Energy/intensity value for the moving target.
-    - **Stationary Target Distance (2 bytes)**: Distance to the stationary target in centimeters.
-    - **Stationary Target Energy (1 byte)**: Energy/intensity value for the stationary target.
-    - **Detection Distance (2 bytes)**: Overall maximum detection range.
+  - **Full Basic Target Information (same as in Basic Mode)**:
   - **Movement Gate Energy Values**: Energy levels for each distance gate (N values depending on the number of configured gates), representing the intensity of moving targets at each gate.
   - **Stationary Gate Energy Values**: Energy levels for each distance gate (N values) for stationary targets.
   - **Light Sensor Value (1 byte)**: Reports a value in the range of 0–255 representing detected light intensity (if applicable).
