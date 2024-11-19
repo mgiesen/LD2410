@@ -309,10 +309,10 @@ LD2410::LD2410() : _debug_serial(nullptr), _lastError(Error::NONE)
     memset(&_outputObservation, 0, sizeof(_outputObservation));
 }
 
-bool LD2410::beginUART(uint8_t esp32_rx_pin, uint8_t esp32_tx_pin, HardwareSerial &serial, unsigned long baud)
+bool LD2410::beginUART(uint8_t mcu_rx_pin, uint8_t mcu_tx_pin, HardwareSerial &serial, unsigned long baud)
 {
     _uart.serial = &serial;
-    _uart.serial->begin(baud, SERIAL_8N1, esp32_rx_pin, esp32_tx_pin);
+    _uart.serial->begin(baud, SERIAL_8N1, mcu_rx_pin, mcu_tx_pin);
 
     delay(500); // Wait for serial connection to stabilize
 
@@ -363,14 +363,13 @@ bool LD2410::beginOutputObservation(uint8_t pin, void (*callback)(bool), uint8_t
     return true;
 }
 
-void LD2410::processUART()
+void LD2410::processUART(uint8_t maxBytesPerLoop)
 {
     if (!_uart.initialized)
     {
         return;
     }
 
-    const uint8_t maxBytesPerLoop = 32;
     uint8_t bytesProcessed = 0;
 
     // Process incoming data

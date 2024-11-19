@@ -80,14 +80,14 @@ public:
     //===========================================
     // Initialization & Setup
     //===========================================
-    bool beginUART(uint8_t esp32_rx_pin, uint8_t esp32_tx_pin, HardwareSerial &serial, unsigned long baud = 256000);
+    bool beginUART(uint8_t mcu_rx_pin, uint8_t mcu_tx_pin, HardwareSerial &serial, unsigned long baud = 256000);
     bool beginOutputObservation(uint8_t pin, void (*callback)(bool), uint8_t pin_mode_option);
     void useDebug(Stream &debugSerial);
 
     //===========================================
     // Loop
     //===========================================
-    void processUART();
+    void processUART(uint8_t maxBytesPerLoop = 32);
 
     //===========================================
     // Data Access
