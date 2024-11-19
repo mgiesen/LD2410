@@ -20,37 +20,66 @@ A lightweight library for the LD2410 sensor, enabling easy UART communication an
 LD2410 sensor;
 ```
 
-**Debugging**
+**Simple Output Pin Observation**
 
 ```cpp
-Serial.begin(115200);
+void outputCallback(bool presenceDetected)
+{
+    if (presenceDetected)
+    {
+        Serial.println("Presence detected");
+    }
+    else
+    {
+        Serial.println("No presence detected");
+    }
+}
 
-sensor.useDebug(Serial);
+setup()
+{
+    Serial.begin(9600);
+    sensor.beginOutputObservation(outputPin, outputCallback);
+}
 ```
 
-**UART Communication**
+## UART Communication example
 
 ```cpp
 setup()
 {
+    Serial.begin(9600);
     sensor.beginUART(ld2410txPin, ld2410rxPin, Serial2, 256000);
 }
 
 loop()
 {
     sensor.processUART();
+
+    LD2410::BasicData basicData = ld2410.getBasicData();
+    Serial.println("Detection Distance: " + String(basicData.detectionDistance) + " cm");
 }
 ```
 
-**Output Observation**
+## List of public functions
 
 ```cpp
-setup()
-{
-    void outputCallback(bool presenceDetected) {}
-
-    sensor.beginOutputObservation(pin, outputCallback);
-}
+sensor.beginUART(rx_pin, tx_pin, serial, baud);                     // Initialize UART communication with the sensor
+sensor.useDebug(serialPort);                                        // Enable debugging output to specified serial port
+sensor.processUART(maxBytesPerLoop);                                // Process incoming UART data, max bytes per loop iteration
+sensor.getBasicData();                                              // Get latest basic sensor data
+sensor.getEngineeringData();                                        // Get latest engineering sensor data
+sensor.prettyPrintData(output);                                     // Pretty print current sensor data to output stream
+sensor.getLastErrorString();                                        // Get string description of last error
+sensor.setMaxValues(movingGate, stationaryGate, timeout);           // Set maximum detection gates for moving and stationary targets
+sensor.setGateSensitivityThreshold(gate, moving, stationary);       // Set sensitivity threshold for specific detection gate
+sensor.enableEngineeringMode();                                     // Enable engineering mode for additional sensor data output
+sensor.disableEngineeringMode();                                    // Disable engineering mode
+sensor.setBaudRate(baudRate);                                       // Change sensor UART baud rate
+sensor.setDistanceResolution(use020mResolution);                    // Set distance resolution (0.20m or 0.75m per gate)
+sensor.factoryReset();                                              // Reset sensor to factory defaults
+sensor.restart();                                                   // Restart the sensor
+sensor.readConfiguration();                                         // Read current sensor configuration
+sensor.beginOutputObservation(pin, callback, pinMode);              // Start observing sensor's digital output pin with callback
 ```
 
 # Sensor
@@ -208,4 +237,26 @@ The `BasicData` and `EngineeringData` are updated by parsing data from the LD241
 
 The timestamp is generated using the `millis()` function, which counts milliseconds since the MCU started running the current program. However, `millis()` will overflow and reset to zero after approximately 50 days. This overflow will render the timestamp invalid.
 
-##
+## Command Acknowledgment (Not fully implemented yet)
+
+Currently, commands are sent without verifying successful execution. In future versions, we will implement a robust command verification process:
+
+1. **Current Implementation**
+
+- Commands are sent without waiting for acknowledgment
+- Success is assumed if no error occurs during transmission
+
+2. **Planned Implementation**
+
+```mermaid
+flowchart TD
+Start["Start"] --> |Enable config| ACK1{ACK?}
+ACK1 -->|Yes| Cmd["Send command(s)"]
+ACK1 -->|No| Finish["Finish"]
+Cmd --> ACK2{ACK?}
+ACK2 -->|Yes| EndCmd["End config"]
+ACK2 -->|No| Finish
+EndCmd --> ACK3{ACK?}
+ACK3 -->|Yes| Finish
+ACK3 -->|No| Finish
+```
