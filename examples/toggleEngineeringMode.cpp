@@ -1,6 +1,10 @@
 #include <Arduino.h>
 #include "LD2410.h"
 
+// Define the MCU pins for the LD2410 UART interface (TYPE uint8_t ONLY!!)
+#define ld2410tx 17
+#define ld2410rx 18
+
 // Create an instance of the LD2410 class
 LD2410 ld2410;
 
@@ -14,13 +18,10 @@ void setup()
     while (!Serial)
         ; // Wait until Serial is ready
 
-    // Enable debug messages from the library
+    // Optionally enable debug messages from the library
     ld2410.useDebug(Serial);
 
-    // Initialize the UART for the sensor
-    uint8_t ld2410tx = 17; // MCU RX pin (connected to sensor TX)
-    uint8_t ld2410rx = 18; // MCU TX pin (connected to sensor RX)
-
+    // Initialize the UART interface
     if (!ld2410.beginUART(ld2410tx, ld2410rx, Serial2))
     {
         Serial.println("Failed to initialize LD2410 UART");
@@ -36,7 +37,7 @@ void loop()
     // Process incoming UART data from the sensor
     ld2410.processUART();
 
-    // Periodically output sensor data and toggle mode
+    // Periodically output sensor data and toggle data mode
     static unsigned long lastPrintTime = 0;
     if (millis() - lastPrintTime >= 2000)
     {

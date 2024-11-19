@@ -220,7 +220,7 @@ bool LD2410::FrameProcessor::parseCommandFrame(uint16_t expectedCommand)
 //===========================================
 // CommandManager Implementation
 //===========================================
-LD2410::CommandManager::CommandManager() : _inConfigMode(false), _lastCommandTime(0) {}
+LD2410::CommandManager::CommandManager() : _inConfigMode(false) {}
 
 bool LD2410::CommandManager::sendCommand(HardwareSerial &serial, const uint8_t *cmd, size_t length)
 {
@@ -232,8 +232,31 @@ bool LD2410::CommandManager::sendCommand(HardwareSerial &serial, const uint8_t *
     serial.write(footer, 4);
     serial.flush();
 
-    _lastCommandTime = millis();
-    return true;
+    return true; // For now: Asume, that the command was sent successfully
+}
+
+// To-Do: Implement function into sendCommand, to validate sucess
+bool LD2410::CommandManager::waitForAck(HardwareSerial &serial, CircularBuffer &buffer, FrameProcessor &processor, uint16_t expectedCommand)
+{
+    unsigned long start = millis();
+
+    while (millis() - start < LD2410_COMMAND_TIMEOUT)
+    {
+        if (serial.available())
+        {
+            if (!buffer.add(serial.read()))
+            {
+                return false;
+            }
+        }
+
+        if (processor.processFrame(buffer) && processor.isAckFrame())
+        {
+            return processor.parseCommandFrame(expectedCommand);
+        }
+    }
+
+    return false;
 }
 
 bool LD2410::CommandManager::enterConfigMode(HardwareSerial &serial)
@@ -270,31 +293,6 @@ bool LD2410::CommandManager::exitConfigMode(HardwareSerial &serial)
     _inConfigMode = false;
     delay(LD2410_COMMAND_DELAY);
     return true;
-}
-
-// To-Do: Implement function into commands
-bool LD2410::CommandManager::waitForAck(HardwareSerial &serial, CircularBuffer &buffer,
-                                        FrameProcessor &processor, uint16_t expectedCommand)
-{
-    unsigned long start = millis();
-
-    while (millis() - start < LD2410_COMMAND_TIMEOUT)
-    {
-        if (serial.available())
-        {
-            if (!buffer.add(serial.read()))
-            {
-                return false;
-            }
-        }
-
-        if (processor.processFrame(buffer) && processor.isAckFrame())
-        {
-            return processor.parseCommandFrame(expectedCommand);
-        }
-    }
-
-    return false;
 }
 
 //===========================================

@@ -51,6 +51,7 @@ public:
         MOVING_AND_STATIONARY = 0x03
     };
 
+    // Data structure for basic sensor data
     struct BasicData
     {
         TargetState targetState;
@@ -65,6 +66,7 @@ public:
         bool isBasicDataCurrent(const int timeout = 1500) const { return millis() - lastSensorDataUpdate < timeout; } // Warning: millis() overflow can cause false validation results. Considered low risk and low priority.
     };
 
+    // Data structure for advanced sensor data
     struct EngineeringData : public BasicData
     {
         uint8_t maxMovingGate;
@@ -162,7 +164,6 @@ private:
 
     private:
         bool _inConfigMode;
-        unsigned long _lastCommandTime;
     };
 
     //===========================================
