@@ -18,8 +18,8 @@ void setup()
     ld2410.useDebug(Serial);
 
     // Initialize the UART for the sensor
-    uint8_t ld2410tx = 17; // ESP32 RX pin (connected to sensor TX)
-    uint8_t ld2410rx = 18; // ESP32 TX pin (connected to sensor RX)
+    uint8_t ld2410tx = 17; // MCU RX pin (connected to sensor TX)
+    uint8_t ld2410rx = 18; // MCU TX pin (connected to sensor RX)
 
     if (!ld2410.beginUART(ld2410tx, ld2410rx, Serial2))
     {
@@ -50,7 +50,7 @@ void loop()
             if (!ld2410.disableEngineeringMode())
             {
                 Serial.print("Failed to disable engineering mode: ");
-                Serial.println(ld2410.getErrorString());
+                Serial.println(ld2410.getLastErrorString());
             }
             else
             {
@@ -64,7 +64,7 @@ void loop()
             if (!ld2410.enableEngineeringMode())
             {
                 Serial.print("Failed to enable engineering mode: ");
-                Serial.println(ld2410.getErrorString());
+                Serial.println(ld2410.getLastErrorString());
             }
             else
             {

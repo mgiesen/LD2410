@@ -22,8 +22,6 @@
 
 // Distance Gates
 #define LD2410_MAX_GATES 8
-#define LD2410_MAX_DISTANCE_075M (LD2410_MAX_GATES * 75) // cm with 0.75m resolution
-#define LD2410_MAX_DISTANCE_020M (LD2410_MAX_GATES * 20) // cm with 0.20m resolution
 
 // Sensitivity Ranges
 #define LD2410_MIN_SENSITIVITY 0
@@ -53,60 +51,143 @@ public:
         MOVING_AND_STATIONARY = 0x03
     };
 
-    struct SensorData
+    struct BasicData
     {
         TargetState targetState;
-        uint16_t movingTargetDistance;     // in cm
-        uint8_t movingTargetEnergy;        // 0-100
-        uint16_t stationaryTargetDistance; // in cm
-        uint8_t stationaryTargetEnergy;    // 0-100
-        uint16_t detectionDistance;        // in cm
-        uint8_t lightSensorValue;          // 0-255
-        bool outPinState;                  // true = occupied
+        uint16_t movingTargetDistance;                                                                                // in cm
+        uint8_t movingTargetEnergy;                                                                                   // 0-100
+        uint16_t stationaryTargetDistance;                                                                            // in cm
+        uint8_t stationaryTargetEnergy;                                                                               // 0-100
+        uint16_t detectionDistance;                                                                                   // in cm
+        uint8_t lightSensorValue;                                                                                     // 0-255
+        bool outPinState;                                                                                             // true = occupied
+        unsigned long lastSensorDataUpdate;                                                                           // in ms
+        bool isBasicDataCurrent(const int timeout = 1500) const { return millis() - lastSensorDataUpdate < timeout; } // Warning: millis() overflow can cause false validation results. Considered low risk and low priority.
     };
 
-    struct EngineeringData : public SensorData
+    struct EngineeringData : public BasicData
     {
         uint8_t maxMovingGate;
         uint8_t maxStationaryGate;
         uint8_t movingEnergyGates[LD2410_MAX_GATES];
         uint8_t stationaryEnergyGates[LD2410_MAX_GATES];
+        unsigned long lastEngineeringDataUpdate;
+        bool isEngineeringDataCurrent(const int timeout = 1500) const { return millis() - lastEngineeringDataUpdate < timeout; } // Warning: millis() overflow can cause false validation results. Considered low risk and low priority.
     };
 
     LD2410();
 
-    // Setup functions
+    //===========================================
+    // Initialization & Setup
+    //===========================================
     bool beginUART(uint8_t esp32_rx_pin, uint8_t esp32_tx_pin, HardwareSerial &serial, unsigned long baud = 256000);
     bool beginOutputObservation(uint8_t pin, void (*callback)(bool), uint8_t pin_mode_option);
     void useDebug(Stream &debugSerial);
-    Error getLastError() const { return _lastError; }
-    const char *getErrorString() const;
 
-    // Main Loop
+    //===========================================
+    // Loop
+    //===========================================
     void processUART();
 
-    // Basic configuration
+    //===========================================
+    // Data Access
+    //===========================================
+    const BasicData &getBasicData() const { return _basicData; }
+    const EngineeringData &getEngineeringData() const { return _engineeringData; }
+    void prettyPrintData(Stream &output);
+    const char *getLastErrorString() const;
+
+    //===========================================
+    // Configuration Commands
+    //===========================================
     bool setMaxValues(uint8_t movingGate, uint8_t stationaryGate, uint16_t timeout);
     bool setGateSensitivityThreshold(uint8_t gate, uint8_t moving, uint8_t stationary);
     bool enableEngineeringMode();
     bool disableEngineeringMode();
-
-    // Advanced configuration
     bool setBaudRate(unsigned long baudRate);
     bool setDistanceResolution(bool use020mResolution);
     bool factoryReset();
     bool restart();
-
-    // Data access
-    const SensorData &getCurrentData() const { return _currentData; }
-    const EngineeringData &getEngineeringData() const { return _engineeringData; }
-
-    // Utility functions
     bool readConfiguration();
-    void prettyPrintData(Stream &output);
 
 private:
-    // Output observation configuration
+    class CircularBuffer
+    {
+    public:
+        CircularBuffer();
+        bool add(uint8_t byte);
+        bool read(uint8_t &byte);
+        void clear();
+        bool isEmpty() const;
+
+    private:
+        uint8_t _buffer[LD2410_BUFFER_SIZE];
+        uint16_t _head;
+        uint16_t _tail;
+    };
+
+    class FrameProcessor
+    {
+    public:
+        FrameProcessor();
+
+        bool processFrame(CircularBuffer &buffer);
+        bool isAckFrame() const;
+        const uint8_t *getFrameData() const;
+        uint16_t getFrameLength() const;
+        void reset();
+        void parseDataFrame(BasicData &data, EngineeringData &engData);
+        bool parseCommandFrame(uint16_t expectedCommand);
+
+    private:
+        uint8_t _frame[LD2410_MAX_FRAME_LENGTH];
+        uint16_t _position;
+        bool _started;
+        bool _isAckFrame;
+
+        bool findFrameStart(CircularBuffer &buffer);
+        bool validateFrame() const;
+    };
+
+    class CommandManager
+    {
+    public:
+        CommandManager();
+
+        bool sendCommand(HardwareSerial &serial, const uint8_t *cmd, size_t length);
+        bool enterConfigMode(HardwareSerial &serial);
+        bool exitConfigMode(HardwareSerial &serial);
+        bool waitForAck(HardwareSerial &serial, CircularBuffer &buffer, FrameProcessor &processor, uint16_t expectedCommand);
+        bool isInConfigMode() const { return _inConfigMode; }
+
+    private:
+        bool _inConfigMode;
+        unsigned long _lastCommandTime;
+    };
+
+    //===========================================
+    // UART Interface Management
+    //===========================================
+    struct UARTInterface
+    {
+        HardwareSerial *serial;
+        bool initialized;
+        bool isEngineeringMode;
+        CircularBuffer buffer;
+        FrameProcessor frameProcessor;
+        CommandManager commandManager;
+
+        void init()
+        {
+            serial = nullptr;
+            initialized = false;
+            isEngineeringMode = false;
+        }
+    } _uart;
+
+    //===========================================
+    // Output Pin Management
+    //===========================================
     struct OutputObservation
     {
         uint8_t pin;
@@ -115,79 +196,26 @@ private:
         volatile bool lastState;
     } _outputObservation;
 
-    // UART interface configuration
-    struct UARTInterface
-    {
-        HardwareSerial *serial;
-        bool initialized;
-        bool commandMode;
-        bool isEngineeringMode;
-        unsigned long lastCommandTime;
-
-        // Buffer management
-        uint8_t buffer[LD2410_BUFFER_SIZE];
-        uint16_t bufferHead;
-        uint16_t bufferTail;
-
-        // Frame handling
-        uint8_t frame[LD2410_MAX_FRAME_LENGTH];
-        uint16_t framePosition;
-        bool frameStarted;
-        bool isAckFrame;
-
-        void init()
-        {
-            serial = nullptr;
-            initialized = false;
-            commandMode = false;
-            isEngineeringMode = false;
-            lastCommandTime = 0;
-            bufferHead = 0;
-            bufferTail = 0;
-            framePosition = 0;
-            frameStarted = false;
-            isAckFrame = false;
-        }
-    } _uart;
-
-    // Hardware interfaces
-    Stream *_debug_serial;
-
-    // State management
-    Error _lastError;
-
-    // Data storage
-    SensorData _currentData;
-    EngineeringData _engineeringData;
-
-    // Output observation
     static void IRAM_ATTR digitalOutputInterrupt(void *arg);
 
-    // Internal functions
-    bool sendCommand(const uint8_t *cmd, size_t length);
-    bool enterConfigMode();
-    bool exitConfigMode();
-    bool waitForAck(uint16_t expectedCommand);
+    //===========================================
+    // Internal State & Data
+    //===========================================
+    Stream *_debug_serial;
+    Error _lastError;
+    BasicData _basicData;
+    EngineeringData _engineeringData;
 
-    // Buffer management
-    bool addToBuffer(uint8_t byte);
-    bool readFromBuffer(uint8_t &byte);
-    void clearBuffer();
-
-    // Frame handling
-    bool findFrameStart();
-    bool readFrame();
-    bool validateFrame();
-    void parseDataFrame();
-    bool parseCommandFrame(uint16_t expectedCommand);
-
-    // Utility functions
+    //===========================================
+    // Internal Utility Functions
+    //===========================================
     void debugPrint(const char *message);
     void debugPrintln(const char *message);
     void waitFor(unsigned long ms);
     bool validateGate(uint8_t gate) const;
     bool validateSensitivity(uint8_t sensitivity) const;
     void setError(Error error);
+    void debugPrintHex(const char *prefix, const uint8_t *data, uint16_t length);
 };
 
 #endif // LD2410_H
