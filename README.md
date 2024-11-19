@@ -14,13 +14,13 @@ A lightweight library for the LD2410 sensor, enabling easy UART communication an
 
 ## Usage
 
-**Initialization**
+### Initialization
 
 ```cpp
 LD2410 sensor;
 ```
 
-**Simple Output Pin Observation**
+### Simple Output Pin Observation
 
 ```cpp
 void outputCallback(bool presenceDetected)
@@ -42,7 +42,7 @@ setup()
 }
 ```
 
-## UART Communication example
+### UART Communication example
 
 ```cpp
 setup()
@@ -60,7 +60,7 @@ loop()
 }
 ```
 
-## List of public functions
+### List of public functions
 
 ```cpp
 sensor.beginUART(rx_pin, tx_pin, serial, baud);                     // Initialize UART communication with the sensor
