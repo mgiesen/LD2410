@@ -78,21 +78,17 @@ HEADER        LENGTH   DATA        FOOTER
 FD FC FB FA   XX XX    [payload]   04 03 02 01
 ```
 
-### Data Frame
+## Data Frame
 
 ```
 HEADER        LENGTH   DATA        FOOTER
 F4 F3 F2 F1   XX XX    [payload]   F8 F7 F6 F5
 ```
 
-## Basic Target Information
+### Data - Basic Target Information
 
-The LD2410 sensor transmits basic target information in a structured data frame format. The frame layout is as follows:
+The LD2410 sensor transmits basic target information in a structured data frame format.
 
-**Frame Breakdown:**
-
-- **HEADER (`F4 F3 F2 F1`)**: Identifies the start of the data frame.
-- **LENGTH (`XX XX`)**: Indicates the length of the data in the frame.
 - **DATA**:
   - **Target State (1 byte)**: Indicates the detected target status with possible values:
     - `0x00`: No Target
@@ -104,18 +100,14 @@ The LD2410 sensor transmits basic target information in a structured data frame 
   - **Stationary Target Distance (2 bytes)**: Distance to the detected stationary target in centimeters.
   - **Stationary Target Energy (1 byte)**: Energy or intensity of the stationary target.
   - **Detection Distance (2 bytes)**: The maximum detection range for the targets.
-- **FOOTER (`F8 F7 F6 F5`)**: Identifies the end of the data frame.
 
-## Engineering Mode Target Information
+### Data - Engineering Mode Target Information
 
-When the LD2410 sensor operates in Engineering Mode, it transmits additional detailed data within its frames, enhancing the basic target information with energy values for each distance gate. The structure of the frame is as follows:
+When the LD2410 sensor operates in Engineering Mode, it transmits additional detailed data within its frames, enhancing the basic target information with energy values for each distance gate.
 
 **Frame Breakdown:**
 
-- **HEADER (`F4 F3 F2 F1`)**: Identifies the start of the data frame.
-- **LENGTH (`XX XX`)**: Indicates the length of the data in the frame.
 - **DATA**:
-
   - **Basic Target Information (same as in Basic Mode)**:
     - **Target State (1 byte)**: Indicates the detected target status.
     - **Movement Target Distance (2 bytes)**: Distance to the moving target in centimeters.
@@ -127,8 +119,6 @@ When the LD2410 sensor operates in Engineering Mode, it transmits additional det
   - **Stationary Gate Energy Values**: Energy levels for each distance gate (N values) for stationary targets.
   - **Light Sensor Value (1 byte)**: Reports a value in the range of 0–255 representing detected light intensity (if applicable).
   - **OUT Pin State (1 byte)**: Indicates the state of the OUT pin (0 for no target, 1 for target detected).
-
-- **FOOTER (`F8 F7 F6 F5`)**: Identifies the end of the data frame.
 
 ## Default Sensitivity Settings
 
@@ -146,15 +136,6 @@ When the LD2410 sensor operates in Engineering Mode, it transmits additional det
 1. All commands require Enable Config (0x00FF) first
 1. All commands must be followed by End Config (0x00FE)
 1. All multi-byte values are little-endian
-
-## Engineering Mode Data
-
-Adds additional information to standard frame:
-
-- Moving target energy per gate
-- Stationary target energy per gate
-- Light sensor value (0-255)
-- OUT pin state
 
 # Technical Notes
 
