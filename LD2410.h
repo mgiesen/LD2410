@@ -17,8 +17,8 @@
 // Protocol Constants
 #define LD2410_BUFFER_SIZE 1024
 #define LD2410_MAX_FRAME_LENGTH 1024
-#define LD2410_COMMAND_TIMEOUT 1000
-#define LD2410_COMMAND_DELAY 100
+#define LD2410_COMMAND_TIMEOUT 2000
+#define LD2410_COMMAND_DELAY 200
 
 // Distance Gates
 #define LD2410_MAX_GATES 8
@@ -111,6 +111,7 @@ public:
     bool factoryReset();
     bool restart();
     bool readConfiguration();
+    bool getFirmwareVersion(uint8_t &major, uint8_t &minor, uint16_t &bugfix, uint16_t &build);
 
 private:
     class CircularBuffer

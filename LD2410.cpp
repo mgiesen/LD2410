@@ -608,6 +608,124 @@ bool LD2410::readConfiguration()
     return success;
 }
 
+bool LD2410::getFirmwareVersion(uint8_t &major, uint8_t &minor, uint16_t &bugfix, uint16_t &build)
+{
+    if (!_uart.initialized)
+    {
+        return false;
+    }
+
+    uint8_t buffer[64] = {0};
+    uint8_t bufferIndex = 0;
+
+    debugPrintln("\n=== Starting Version Query with Endless Listen ===");
+
+    // 1. Enter Config Mode
+    const uint8_t configCmd[] = {0xFD, 0xFC, 0xFB, 0xFA, 0x04, 0x00, 0xFF, 0x00, 0x01, 0x00, 0x04, 0x03, 0x02, 0x01};
+    debugPrintHex("TX CONFIG: ", configCmd, sizeof(configCmd));
+    _uart.serial->write(configCmd, sizeof(configCmd));
+    _uart.serial->flush();
+
+    debugPrintln("Listening for CONFIG response:");
+    unsigned long lastByteTime = millis();
+    bufferIndex = 0;
+
+    // Listen bis 2 Sekunden lang keine Daten mehr kommen
+    while (true)
+    {
+        if (_uart.serial->available())
+        {
+            buffer[bufferIndex++] = _uart.serial->read();
+            lastByteTime = millis();
+
+            // Print sofort jedes Byte
+            if (_debug_serial)
+            {
+                _debug_serial->printf("%02X ", buffer[bufferIndex - 1]);
+            }
+        }
+
+        // Wenn 2 Sekunden keine Daten mehr kamen, weiter zum nächsten Command
+        if (millis() - lastByteTime > 2000)
+        {
+            debugPrintln("\nNo more data for 2 seconds...");
+            break;
+        }
+        yield(); // ESP32 Watchdog füttern
+    }
+
+    // 2. Request Version
+    delay(100); // Kurze Pause zwischen Commands
+    const uint8_t versionCmd[] = {0xFD, 0xFC, 0xFB, 0xFA, 0x02, 0x00, 0xA0, 0x00, 0x04, 0x03, 0x02, 0x01};
+    debugPrintHex("\nTX VERSION: ", versionCmd, sizeof(versionCmd));
+    _uart.serial->write(versionCmd, sizeof(versionCmd));
+    _uart.serial->flush();
+
+    debugPrintln("Listening for VERSION response:");
+    lastByteTime = millis();
+    bufferIndex = 0;
+
+    // Wieder endlos zuhören
+    while (true)
+    {
+        if (_uart.serial->available())
+        {
+            buffer[bufferIndex++] = _uart.serial->read();
+            lastByteTime = millis();
+
+            // Print sofort jedes Byte
+            if (_debug_serial)
+            {
+                _debug_serial->printf("%02X ", buffer[bufferIndex - 1]);
+            }
+        }
+
+        if (millis() - lastByteTime > 2000)
+        {
+            debugPrintln("\nNo more data for 2 seconds...");
+            break;
+        }
+        yield();
+    }
+
+    // 3. Exit Config Mode
+    delay(100);
+    const uint8_t exitCmd[] = {0xFD, 0xFC, 0xFB, 0xFA, 0x02, 0x00, 0xFE, 0x00, 0x04, 0x03, 0x02, 0x01};
+    debugPrintHex("\nTX EXIT: ", exitCmd, sizeof(exitCmd));
+    _uart.serial->write(exitCmd, sizeof(exitCmd));
+    _uart.serial->flush();
+
+    debugPrintln("Listening for EXIT response:");
+    lastByteTime = millis();
+    bufferIndex = 0;
+
+    // Ein letztes Mal endlos zuhören
+    while (true)
+    {
+        if (_uart.serial->available())
+        {
+            buffer[bufferIndex++] = _uart.serial->read();
+            lastByteTime = millis();
+
+            // Print sofort jedes Byte
+            if (_debug_serial)
+            {
+                _debug_serial->printf("%02X ", buffer[bufferIndex - 1]);
+            }
+        }
+
+        if (millis() - lastByteTime > 2000)
+        {
+            debugPrintln("\nNo more data for 2 seconds...");
+            break;
+        }
+        yield();
+    }
+
+    debugPrintln("\n=== End of Version Query ===\n");
+    return false;
+}
+
 void IRAM_ATTR LD2410::digitalOutputInterrupt(void *arg)
 {
     LD2410 *instance = static_cast<LD2410 *>(arg);
