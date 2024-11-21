@@ -30,9 +30,9 @@ To analyze the problem further, I implemented an interrupt routine to monitor th
 **Data Interpretation**
 
 - No UART communication occurs while a human is present or the data pin is HIGH.
-- Visualized by Log 1
+- Visualized by `log_1.txt`
   ![plot_1.png](plots/plot_1.png)
-- Visualized by Log 1
+- Visualized by `log_2.txt`
   ![plot_2.png](plots/plot_2.png)
 
 **Raw Data Snippet**
