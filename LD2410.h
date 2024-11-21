@@ -99,6 +99,9 @@ public:
     void prettyPrintData(Stream &output);
     const char *getLastErrorString() const;
 
+    String getMacAddress();
+    String getFirmwareVersion();
+
     //===========================================
     // Configuration Commands
     //===========================================
@@ -111,7 +114,6 @@ public:
     bool factoryReset();
     bool restart();
     bool readConfiguration();
-    bool getFirmwareVersion(uint8_t &major, uint8_t &minor, uint16_t &bugfix, uint16_t &build);
 
 private:
     class CircularBuffer

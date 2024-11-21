@@ -608,124 +608,6 @@ bool LD2410::readConfiguration()
     return success;
 }
 
-bool LD2410::getFirmwareVersion(uint8_t &major, uint8_t &minor, uint16_t &bugfix, uint16_t &build)
-{
-    if (!_uart.initialized)
-    {
-        return false;
-    }
-
-    uint8_t buffer[64] = {0};
-    uint8_t bufferIndex = 0;
-
-    debugPrintln("\n=== Starting Version Query with Endless Listen ===");
-
-    // 1. Enter Config Mode
-    const uint8_t configCmd[] = {0xFD, 0xFC, 0xFB, 0xFA, 0x04, 0x00, 0xFF, 0x00, 0x01, 0x00, 0x04, 0x03, 0x02, 0x01};
-    debugPrintHex("TX CONFIG: ", configCmd, sizeof(configCmd));
-    _uart.serial->write(configCmd, sizeof(configCmd));
-    _uart.serial->flush();
-
-    debugPrintln("Listening for CONFIG response:");
-    unsigned long lastByteTime = millis();
-    bufferIndex = 0;
-
-    // Listen bis 2 Sekunden lang keine Daten mehr kommen
-    while (true)
-    {
-        if (_uart.serial->available())
-        {
-            buffer[bufferIndex++] = _uart.serial->read();
-            lastByteTime = millis();
-
-            // Print sofort jedes Byte
-            if (_debug_serial)
-            {
-                _debug_serial->printf("%02X ", buffer[bufferIndex - 1]);
-            }
-        }
-
-        // Wenn 2 Sekunden keine Daten mehr kamen, weiter zum nächsten Command
-        if (millis() - lastByteTime > 2000)
-        {
-            debugPrintln("\nNo more data for 2 seconds...");
-            break;
-        }
-        yield(); // ESP32 Watchdog füttern
-    }
-
-    // 2. Request Version
-    delay(100); // Kurze Pause zwischen Commands
-    const uint8_t versionCmd[] = {0xFD, 0xFC, 0xFB, 0xFA, 0x02, 0x00, 0xA0, 0x00, 0x04, 0x03, 0x02, 0x01};
-    debugPrintHex("\nTX VERSION: ", versionCmd, sizeof(versionCmd));
-    _uart.serial->write(versionCmd, sizeof(versionCmd));
-    _uart.serial->flush();
-
-    debugPrintln("Listening for VERSION response:");
-    lastByteTime = millis();
-    bufferIndex = 0;
-
-    // Wieder endlos zuhören
-    while (true)
-    {
-        if (_uart.serial->available())
-        {
-            buffer[bufferIndex++] = _uart.serial->read();
-            lastByteTime = millis();
-
-            // Print sofort jedes Byte
-            if (_debug_serial)
-            {
-                _debug_serial->printf("%02X ", buffer[bufferIndex - 1]);
-            }
-        }
-
-        if (millis() - lastByteTime > 2000)
-        {
-            debugPrintln("\nNo more data for 2 seconds...");
-            break;
-        }
-        yield();
-    }
-
-    // 3. Exit Config Mode
-    delay(100);
-    const uint8_t exitCmd[] = {0xFD, 0xFC, 0xFB, 0xFA, 0x02, 0x00, 0xFE, 0x00, 0x04, 0x03, 0x02, 0x01};
-    debugPrintHex("\nTX EXIT: ", exitCmd, sizeof(exitCmd));
-    _uart.serial->write(exitCmd, sizeof(exitCmd));
-    _uart.serial->flush();
-
-    debugPrintln("Listening for EXIT response:");
-    lastByteTime = millis();
-    bufferIndex = 0;
-
-    // Ein letztes Mal endlos zuhören
-    while (true)
-    {
-        if (_uart.serial->available())
-        {
-            buffer[bufferIndex++] = _uart.serial->read();
-            lastByteTime = millis();
-
-            // Print sofort jedes Byte
-            if (_debug_serial)
-            {
-                _debug_serial->printf("%02X ", buffer[bufferIndex - 1]);
-            }
-        }
-
-        if (millis() - lastByteTime > 2000)
-        {
-            debugPrintln("\nNo more data for 2 seconds...");
-            break;
-        }
-        yield();
-    }
-
-    debugPrintln("\n=== End of Version Query ===\n");
-    return false;
-}
-
 void IRAM_ATTR LD2410::digitalOutputInterrupt(void *arg)
 {
     LD2410 *instance = static_cast<LD2410 *>(arg);
@@ -904,4 +786,230 @@ void LD2410::debugPrintHex(const char *prefix, const uint8_t *data, uint16_t len
         }
         _debug_serial->println();
     }
+}
+
+String LD2410::getMacAddress()
+{
+    if (!_uart.initialized)
+    {
+        setError(Error::NOT_INITIALIZED);
+        return "Invalid";
+    }
+
+    // Enter configuration mode
+    const uint8_t configCmd[] = {
+        0xFD, 0xFC, 0xFB, 0xFA,
+        0x04, 0x00,
+        0xFF, 0x00,
+        0x01, 0x00,
+        0x04, 0x03, 0x02, 0x01};
+
+    debugPrintln("[LD2410] Entering config mode for MAC query");
+    _uart.serial->write(configCmd, sizeof(configCmd));
+    _uart.serial->flush();
+    delay(100);
+
+    // Clear any response
+    while (_uart.serial->available())
+    {
+        _uart.serial->read();
+    }
+
+    // Send MAC request
+    const uint8_t macCmd[] = {
+        0xFD, 0xFC, 0xFB, 0xFA,
+        0x04, 0x00,
+        0xA5, 0x00,
+        0x01, 0x00,
+        0x04, 0x03, 0x02, 0x01};
+
+    debugPrintln("[LD2410] Requesting MAC address");
+    _uart.serial->write(macCmd, sizeof(macCmd));
+    _uart.serial->flush();
+    delay(50);
+
+    // Read Response
+    unsigned long start = millis();
+    uint8_t buffer[32];
+    size_t pos = 0;
+    bool headerFound = false;
+
+    while (millis() - start < 1000)
+    {
+        if (_uart.serial->available())
+        {
+            uint8_t byte = _uart.serial->read();
+
+            if (!headerFound && byte == 0xFD)
+            {
+                headerFound = true;
+                buffer[0] = byte;
+                pos = 1;
+                continue;
+            }
+
+            if (headerFound && pos < sizeof(buffer))
+            {
+                buffer[pos++] = byte;
+
+                if (pos >= 16)
+                {
+                    if (buffer[0] == 0xFD && buffer[1] == 0xFC &&
+                        buffer[2] == 0xFB && buffer[3] == 0xFA &&
+                        buffer[6] == 0xA5)
+                    {
+
+                        if (buffer[8] == 0x00 && buffer[9] == 0x00)
+                        {
+                            char macStr[18];
+                            snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+                                     buffer[10], buffer[11], buffer[12],
+                                     buffer[13], buffer[14], buffer[15]);
+
+                            // Exit config mode
+                            const uint8_t exitCmd[] = {
+                                0xFD, 0xFC, 0xFB, 0xFA,
+                                0x02, 0x00,
+                                0xFE, 0x00,
+                                0x04, 0x03, 0x02, 0x01};
+                            _uart.serial->write(exitCmd, sizeof(exitCmd));
+                            _uart.serial->flush();
+
+                            debugPrintln("[LD2410] MAC address read successfully");
+                            return String(macStr);
+                        }
+                    }
+                }
+            }
+        }
+        yield();
+    }
+
+    // Exit config mode even on failure
+    const uint8_t exitCmd[] = {
+        0xFD, 0xFC, 0xFB, 0xFA,
+        0x02, 0x00,
+        0xFE, 0x00,
+        0x04, 0x03, 0x02, 0x01};
+    _uart.serial->write(exitCmd, sizeof(exitCmd));
+    _uart.serial->flush();
+
+    debugPrintln("[LD2410] Failed to read MAC address");
+    setError(Error::TIMEOUT);
+    return "Invalid";
+}
+
+String LD2410::getFirmwareVersion()
+{
+    if (!_uart.initialized)
+    {
+        setError(Error::NOT_INITIALIZED);
+        return "Invalid";
+    }
+
+    // Enter configuration mode
+    const uint8_t configCmd[] = {
+        0xFD, 0xFC, 0xFB, 0xFA,
+        0x04, 0x00,
+        0xFF, 0x00,
+        0x01, 0x00,
+        0x04, 0x03, 0x02, 0x01};
+
+    debugPrintln("[LD2410] Entering config mode for firmware query");
+    _uart.serial->write(configCmd, sizeof(configCmd));
+    _uart.serial->flush();
+    delay(100);
+
+    // Clear any response
+    while (_uart.serial->available())
+    {
+        _uart.serial->read();
+    }
+
+    // Send firmware version request
+    const uint8_t versionCmd[] = {
+        0xFD, 0xFC, 0xFB, 0xFA,
+        0x02, 0x00,
+        0xA0, 0x00, // Command für Firmware-Version
+        0x04, 0x03, 0x02, 0x01};
+
+    debugPrintln("[LD2410] Requesting firmware version");
+    _uart.serial->write(versionCmd, sizeof(versionCmd));
+    _uart.serial->flush();
+    delay(50);
+
+    // Read Response
+    unsigned long start = millis();
+    uint8_t buffer[32];
+    size_t pos = 0;
+    bool headerFound = false;
+
+    while (millis() - start < 1000)
+    {
+        if (_uart.serial->available())
+        {
+            uint8_t byte = _uart.serial->read();
+
+            if (!headerFound && byte == 0xFD)
+            {
+                headerFound = true;
+                buffer[0] = byte;
+                pos = 1;
+                continue;
+            }
+
+            if (headerFound && pos < sizeof(buffer))
+            {
+                buffer[pos++] = byte;
+
+                if (pos >= 16)
+                {
+                    if (buffer[0] == 0xFD && buffer[1] == 0xFC &&
+                        buffer[2] == 0xFB && buffer[3] == 0xFA &&
+                        buffer[6] == 0xA0)
+                    {
+
+                        if (buffer[8] == 0x00 && buffer[9] == 0x00)
+                        {
+                            // Format version according to protocol
+                            uint16_t firmwareType = buffer[10] | (buffer[11] << 8);
+                            uint16_t majorVersion = buffer[12] | (buffer[13] << 8);
+                            uint32_t minorVersion = buffer[14] | (buffer[15] << 8) |
+                                                    (buffer[16] << 16) | (buffer[17] << 24);
+
+                            char versionStr[32];
+                            snprintf(versionStr, sizeof(versionStr), "V%d.%02d.%d",
+                                     majorVersion, (minorVersion >> 16) & 0xFF, minorVersion & 0xFFFF);
+
+                            // Exit config mode
+                            const uint8_t exitCmd[] = {
+                                0xFD, 0xFC, 0xFB, 0xFA,
+                                0x02, 0x00,
+                                0xFE, 0x00,
+                                0x04, 0x03, 0x02, 0x01};
+                            _uart.serial->write(exitCmd, sizeof(exitCmd));
+                            _uart.serial->flush();
+
+                            debugPrintln("[LD2410] Firmware version read successfully");
+                            return String(versionStr);
+                        }
+                    }
+                }
+            }
+        }
+        yield();
+    }
+
+    // Exit config mode even on failure
+    const uint8_t exitCmd[] = {
+        0xFD, 0xFC, 0xFB, 0xFA,
+        0x02, 0x00,
+        0xFE, 0x00,
+        0x04, 0x03, 0x02, 0x01};
+    _uart.serial->write(exitCmd, sizeof(exitCmd));
+    _uart.serial->flush();
+
+    debugPrintln("[LD2410] Failed to read firmware version");
+    setError(Error::TIMEOUT);
+    return "Invalid";
 }
