@@ -94,7 +94,7 @@ void setup()
     Serial.printf("[%lu] Initial pin state: %s\n", millis(), output_state ? "HIGH" : "LOW");
     Serial.printf("[%lu] Starting LD2410B UART test...\n", millis());
 
-    Serial2.begin(256000, SERIAL_8N1, 17, 18);
+    Serial2.begin(256000, SERIAL_8N1, 18, 17);
     attachInterrupt(digitalPinToInterrupt(LD2410_OUT_PIN), pinInterrupt, CHANGE);
 }
 
