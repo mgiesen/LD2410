@@ -22,7 +22,7 @@ To analyze the problem further, I implemented an interrupt routine to monitor th
 **Steps**
 
 1. Restarted the MCU.
-2. Left the application area for several seconds.
+2. Left the application area.
 3. Entered the application area for a few seconds.
 4. Repeated the process once.
 5. Stopped the measurement.
@@ -30,8 +30,10 @@ To analyze the problem further, I implemented an interrupt routine to monitor th
 **Data Interpretation**
 
 - No UART communication occurs while a human is present or the data pin is HIGH.
-
-![plot_1.png](plots/plot_1.png)
+- Visualized by Log 1
+  ![plot_1.png](plots/plot_1.png)
+- Visualized by Log 1
+  ![plot_2.png](plots/plot_2.png)
 
 **Raw Data Snippet**
 
@@ -47,6 +49,21 @@ To analyze the problem further, I implemented an interrupt routine to monitor th
 [34194] F4 F3 F2 F1 0D 00 02 AA 00 5A 00 00 5A 00 1D 0F 01 55 00 F8 F7 F6 F5
 ...
 ```
+
+## Test Case 2
+
+**Steps**
+
+1. Restarted the MCU.
+2. Left the application area for > 200 seconds.
+3. Entered the application area again.
+4. Stopped the measurement.
+
+## Solution
+
+After replacing the sensor, the problem couldn't be reproduced. Therefore, I expect a part-failure. Prooven by `log_replaced_sensor.txt`
+
+![plot_replaced_sensor.png](plots/plot_replaced_sensor.png)
 
 ## Code
 

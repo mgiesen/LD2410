@@ -7,14 +7,14 @@ function parseLog(filename)
     const lines = fs.readFileSync(filename, 'utf8').split('\n').slice(14); // Skip the first 14 lines (header)
     const events = [];
 
-    const timestampRegex = /\[(\d+)\]/;
+    const timestampRegex = /\[(\d+)\]/g;
 
     lines.forEach(line =>
     {
-        const match = line.match(timestampRegex);
-        if (match)
+        const matches = [...line.matchAll(timestampRegex)];
+        if (matches.length > 0)
         {
-            const timestamp = parseInt(match[1]);
+            const timestamp = parseInt(matches[matches.length - 1][1]); // Last timestamp
             let type;
             if (line.includes('RISING')) type = 'RISING EDGE';
             else if (line.includes('FALLING')) type = 'FALLING EDGE';
@@ -125,7 +125,16 @@ async function createVisualization(events)
 // Main execution
 (async () =>
 {
-    const events = parseLog('log.txt'); // Load and parse the log file
+    const args = process.argv.slice(2); // Get command-line arguments
+    const logFilePath = args[0] || 'log.txt'; // Use provided path or default to 'log.txt'
+
+    if (!fs.existsSync(logFilePath))
+    {
+        console.error(`Log file not found: ${logFilePath}`);
+        process.exit(1);
+    }
+
+    const events = parseLog(logFilePath); // Load and parse the log file
     const image = await createVisualization(events); // Generate the visualization
     fs.writeFileSync('plot.png', image); // Save the chart as an image
     console.log('The plot has been successfully created and saved as "plot.png".');
