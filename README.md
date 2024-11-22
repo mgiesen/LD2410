@@ -82,43 +82,43 @@ sensor.readConfiguration();                                         // Read curr
 sensor.beginOutputObservation(pin, callback, pinMode);              // Start observing sensor's digital output pin with callback
 ```
 
-# Sensor
+## Sensor
 
-## Pinout
+### Pinout
 
 ![ld2410_pinout.png](/readme/ld2410_pinout.png)
 
-## Wiring
+### Wiring
 
 ![ld2410_connection.svg](/readme/ld2410_connection.svg)
 
-## Documentation
+### Documentation
 
 - [Manual EN](docu/Manual.pdf)
 - [Serial Communication EN](docu/Serial%20Communication.pdf)
 
-## Default Configuration
+### Default Configuration
 
 - UART: 256000 baud, 8N1 (1 stop bit, no parity)
 - Max Gates: 8 (Default max distance)
 - Default Resolution: 0.75m per gate
 - Timeout Duration: 5s
 
-## Command Frame
+### Command Frame
 
 ```
 HEADER        LENGTH   DATA        FOOTER
 FD FC FB FA   XX XX    [payload]   04 03 02 01
 ```
 
-## Data Frame
+### Data Frame
 
 ```
 HEADER        LENGTH   DATA        FOOTER
 F4 F3 F2 F1   XX XX    [payload]   F8 F7 F6 F5
 ```
 
-### Data - Basic Target Information
+#### Data - Basic Target Information
 
 The LD2410 sensor transmits basic target information in a structured data frame format.
 
@@ -134,7 +134,7 @@ The LD2410 sensor transmits basic target information in a structured data frame 
   - **Stationary Target Energy (1 byte)**: Energy or intensity of the stationary target.
   - **Detection Distance (2 bytes)**: The maximum detection range for the targets.
 
-### Data - Engineering Mode Target Information
+#### Data - Engineering Mode Target Information
 
 When the LD2410 sensor operates in Engineering Mode, it transmits additional detailed data within its frames, enhancing the basic target information with energy values for each distance gate.
 
@@ -147,15 +147,15 @@ When the LD2410 sensor operates in Engineering Mode, it transmits additional det
   - **Light Sensor Value (1 byte)**: Reports a value in the range of 0–255 representing detected light intensity (if applicable).
   - **OUT Pin State (1 byte)**: Indicates the state of the OUT pin (0 for no target, 1 for target detected).
 
-## Protocol Rules
+### Protocol Rules
 
 1. All commands require Enable Config first
-1. All commands must be followed by End Config
-1. All multi-byte values are little-endian
+2. All commands must be followed by End Config
+3. All multi-byte values are little-endian
 
-# Technical Notes
+## Technical Notes
 
-## UART Communication Strategy
+### UART Communication Strategy
 
 - **Frame Types**: The LD2410 sensor communicates using two types of data frames:
 
