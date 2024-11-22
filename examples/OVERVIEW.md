@@ -144,19 +144,14 @@ Output pin state: HIGH
 ```console
 Build:Mar 27 2021
 rst:0x15 (USB_UART_CHIP_RESET),boot:0x2b (SPI_FAST_FLASH_BOOT)
-Saved PC:0x40378c43
+Saved PC:0x40378be1
 SPIWP:0xee
 mode:DIO, clock div:1
 load:0x3fce3808,len:0x4bc
 load:0x403c9700,len:0xbd8
 load:0x403cc700,len:0x2a0c
 entry 0x403c98d0
------------------------------------------------------------------------------------------
-This example demonstrates reading, modifying and verifying persistent sensor settings
-It reads the initial configuration, modifies all gate sensitivities,
-restarts the sensor, and verifies if changes persisted through the restart
------------------------------------------------------------------------------------------
-Debug mode enabled
+[LD2410 DEBUGGER] Debug mode enabled
 [LD2410 DEBUGGER] UART initialized successfully
 Reading initial configuration...
 

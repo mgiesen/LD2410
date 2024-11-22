@@ -2,6 +2,7 @@
 #include "LD2410.h"
 
 LD2410 ld2410;
+
 LD2410::ConfigurationData originalConfig;
 
 void setup()
@@ -9,12 +10,6 @@ void setup()
     Serial.begin(115200);
     while (!Serial)
         delay(10);
-
-    Serial.println("-----------------------------------------------------------------------------------------");
-    Serial.println("This example demonstrates reading, modifying and verifying persistent sensor settings");
-    Serial.println("It reads the initial configuration, modifies all gate sensitivities,");
-    Serial.println("restarts the sensor, and verifies if changes persisted through the restart");
-    Serial.println("-----------------------------------------------------------------------------------------");
 
     ld2410.useDebug(Serial);
 
