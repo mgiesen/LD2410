@@ -18,13 +18,12 @@
 #define LD2410_BUFFER_SIZE 1024
 #define LD2410_MAX_FRAME_LENGTH 1024
 #define LD2410_COMMAND_TIMEOUT 2000
-#define LD2410_COMMAND_DELAY 200
+#define LD2410_CONFIG_DELAY 100
 
 // Distance Gates
 #define LD2410_MAX_GATES 8
 
 // Sensitivity Ranges
-#define LD2410_MIN_SENSITIVITY 0
 #define LD2410_MAX_SENSITIVITY 100
 
 class LD2410
@@ -82,6 +81,7 @@ public:
     //===========================================
     // Initialization & Setup
     //===========================================
+
     bool beginUART(uint8_t mcu_rx_pin, uint8_t mcu_tx_pin, HardwareSerial &serial, unsigned long baud = 256000);
     bool beginOutputObservation(uint8_t pin, void (*callback)(bool), uint8_t pin_mode_option);
     void useDebug(Stream &debugSerial);
@@ -89,11 +89,13 @@ public:
     //===========================================
     // Loop
     //===========================================
-    void processUART(uint8_t maxBytesPerLoop = 32);
+
+    void readSensorData(uint8_t maxBytesPerLoop = 32);
 
     //===========================================
     // Data Access
     //===========================================
+
     const BasicData &getBasicData() const { return _basicData; }
     const EngineeringData &getEngineeringData() const { return _engineeringData; }
     void prettyPrintData(Stream &output);
@@ -116,6 +118,9 @@ public:
     bool readConfiguration();
 
 private:
+    // Declare CommandManager as a friend class
+    friend class CommandManager;
+
     class CircularBuffer
     {
     public:
@@ -142,7 +147,6 @@ private:
         uint16_t getFrameLength() const;
         void reset();
         void parseDataFrame(BasicData &data, EngineeringData &engData);
-        bool parseCommandFrame(uint16_t expectedCommand);
 
     private:
         uint8_t _frame[LD2410_MAX_FRAME_LENGTH];
@@ -158,15 +162,17 @@ private:
     {
     public:
         CommandManager();
-
-        bool sendCommand(HardwareSerial &serial, const uint8_t *cmd, size_t length);
+        void init(LD2410 *parent);
+        void sendCommand(HardwareSerial &serial, const uint8_t *cmd, size_t length);
+        bool isInConfigMode() const;
         bool enterConfigMode(HardwareSerial &serial);
         bool exitConfigMode(HardwareSerial &serial);
-        bool waitForAck(HardwareSerial &serial, CircularBuffer &buffer, FrameProcessor &processor, uint16_t expectedCommand);
-        bool isInConfigMode() const { return _inConfigMode; }
+        bool waitForAck(HardwareSerial &serial, uint16_t expectedCommand, uint8_t *response = nullptr);
 
     private:
+        LD2410 *_parent; // Pointer to the parent LD2410 instance
         bool _inConfigMode;
+        bool validateResponse(const uint8_t *response, uint16_t expectedCommand) const;
     };
 
     //===========================================
@@ -181,11 +187,12 @@ private:
         FrameProcessor frameProcessor;
         CommandManager commandManager;
 
-        void init()
+        void init(LD2410 *parent)
         {
             serial = nullptr;
             initialized = false;
             isEngineeringMode = false;
+            commandManager.init(parent);
         }
     } _uart;
 
@@ -215,7 +222,6 @@ private:
     //===========================================
     void debugPrint(const char *message);
     void debugPrintln(const char *message);
-    void waitFor(unsigned long ms);
     bool validateGate(uint8_t gate) const;
     bool validateSensitivity(uint8_t sensitivity) const;
     void setError(Error error);

@@ -14,6 +14,7 @@
 //===========================================
 // CircularBuffer Implementation
 //===========================================
+
 LD2410::CircularBuffer::CircularBuffer() : _head(0), _tail(0) {}
 
 bool LD2410::CircularBuffer::add(uint8_t byte)
@@ -50,10 +51,10 @@ bool LD2410::CircularBuffer::isEmpty() const
 }
 
 //===========================================
-// FrameProcessor Implementation
+// FrameProcessor
 //===========================================
-LD2410::FrameProcessor::FrameProcessor()
-    : _position(0), _started(false), _isAckFrame(false) {}
+
+LD2410::FrameProcessor::FrameProcessor() : _position(0), _started(false), _isAckFrame(false) {}
 
 bool LD2410::FrameProcessor::findFrameStart(CircularBuffer &buffer)
 {
@@ -205,103 +206,190 @@ void LD2410::FrameProcessor::parseDataFrame(BasicData &data, EngineeringData &en
     }
 }
 
-bool LD2410::FrameProcessor::parseCommandFrame(uint16_t expectedCommand)
+//===========================================
+// CommandManager
+//===========================================
+
+LD2410::CommandManager::CommandManager()
+    : _parent(nullptr), _inConfigMode(false)
 {
-    uint16_t receivedCommand = (_frame[7] << 8) | _frame[6];
-    if (receivedCommand != expectedCommand)
+}
+
+void LD2410::CommandManager::init(LD2410 *parent)
+{
+    _parent = parent;
+}
+
+bool LD2410::CommandManager::isInConfigMode() const
+{
+    return _inConfigMode;
+}
+
+bool LD2410::CommandManager::validateResponse(const uint8_t *response, uint16_t expectedCommand) const
+{
+    // Check if header is correct
+    if (response[0] != 0xFD || response[1] != 0xFC || response[2] != 0xFB || response[3] != 0xFA)
     {
         return false;
     }
 
-    uint16_t status = (_frame[9] << 8) | _frame[8];
-    return status == 0;
-}
-
-//===========================================
-// CommandManager Implementation
-//===========================================
-LD2410::CommandManager::CommandManager() : _inConfigMode(false) {}
-
-bool LD2410::CommandManager::sendCommand(HardwareSerial &serial, const uint8_t *cmd, size_t length)
-{
-    const uint8_t header[] = {0xFD, 0xFC, 0xFB, 0xFA};
-    const uint8_t footer[] = {0x04, 0x03, 0x02, 0x01};
-
-    serial.write(header, 4);
-    serial.write(cmd, length);
-    serial.write(footer, 4);
-    serial.flush();
-
-    return true; // For now: Asume, that the command was sent successfully
-}
-
-// To-Do: Implement function into sendCommand, to validate sucess
-bool LD2410::CommandManager::waitForAck(HardwareSerial &serial, CircularBuffer &buffer, FrameProcessor &processor, uint16_t expectedCommand)
-{
-    unsigned long start = millis();
-
-    while (millis() - start < LD2410_COMMAND_TIMEOUT)
+    // Check if the command matches the expected command
+    if (response[6] != (expectedCommand & 0xFF))
     {
-        if (serial.available())
-        {
-            if (!buffer.add(serial.read()))
-            {
-                return false;
-            }
-        }
-
-        if (processor.processFrame(buffer) && processor.isAckFrame())
-        {
-            return processor.parseCommandFrame(expectedCommand);
-        }
+        return false;
     }
 
-    return false;
+    // Check if the status is 0x00 (success)
+    if (response[8] != 0x00)
+    {
+        return false;
+    }
+
+    return true;
+}
+
+void LD2410::CommandManager::sendCommand(HardwareSerial &serial, const uint8_t *cmd, size_t length)
+{
+    serial.write(cmd, length);
+    serial.flush();
 }
 
 bool LD2410::CommandManager::enterConfigMode(HardwareSerial &serial)
 {
     if (_inConfigMode)
-    {
         return true;
-    }
 
-    const uint8_t cmd[] = {0x04, 0x00, 0xFF, 0x00, 0x01, 0x00};
-    if (!sendCommand(serial, cmd, sizeof(cmd)))
+    const uint8_t cmd[] = {
+        0xFD, 0xFC, 0xFB, 0xFA,
+        0x04, 0x00,
+        0xFF, 0x00,
+        0x01, 0x00,
+        0x04, 0x03, 0x02, 0x01};
+
+    sendCommand(serial, cmd, sizeof(cmd));
+
+    // Wait for ACK and check if successful
+    bool success = waitForAck(serial, 0xFF);
+
+    if (success)
     {
-        return false;
+        _inConfigMode = true;
+        delay(LD2410_CONFIG_DELAY); // Delay still needed after successful config mode entry
+
+        // Clear any pending data
+        while (serial.available())
+        {
+            serial.read();
+        }
     }
 
-    _inConfigMode = true;
-    delay(LD2410_COMMAND_DELAY);
-    return true;
+    return success;
 }
 
 bool LD2410::CommandManager::exitConfigMode(HardwareSerial &serial)
 {
     if (!_inConfigMode)
-    {
         return true;
-    }
 
-    const uint8_t cmd[] = {0x02, 0x00, 0xFE, 0x00};
-    if (!sendCommand(serial, cmd, sizeof(cmd)))
+    const uint8_t cmd[] = {
+        0xFD, 0xFC, 0xFB, 0xFA,
+        0x02, 0x00,
+        0xFE, 0x00,
+        0x04, 0x03, 0x02, 0x01};
+
+    sendCommand(serial, cmd, sizeof(cmd));
+
+    // Wait for ACK and check if successful
+    bool success = waitForAck(serial, 0xFE);
+
+    if (success)
     {
-        return false;
+        _inConfigMode = false;
     }
 
-    _inConfigMode = false;
-    delay(LD2410_COMMAND_DELAY);
-    return true;
+    return success;
+}
+
+bool LD2410::CommandManager::waitForAck(HardwareSerial &serial, uint16_t expectedCommand, uint8_t *response)
+{
+    unsigned long start = millis();
+    uint8_t buffer[LD2410_MAX_FRAME_LENGTH]; // Buffer for the received ACK
+    size_t pos = 0;
+    bool headerFound = false;
+
+    // Maximum packet length to avoid infinite loops in case of unexpected packets
+    const size_t maxPacketLength = LD2410_MAX_FRAME_LENGTH;
+
+    while (millis() - start < LD2410_COMMAND_TIMEOUT)
+    {
+        if (serial.available())
+        {
+            uint8_t byte = serial.read();
+
+            // Search for the header (FD FC FB FA)
+            if (!headerFound && byte == 0xFD)
+            {
+                buffer[pos++] = byte;
+                headerFound = true;
+                continue;
+            }
+
+            // After header is found, keep adding bytes
+            if (headerFound && pos < maxPacketLength)
+            {
+                buffer[pos++] = byte;
+
+                // Search for the tail (04 03 02 01)
+                if (pos >= 4 && buffer[pos - 4] == 0x04 && buffer[pos - 3] == 0x03 &&
+                    buffer[pos - 2] == 0x02 && buffer[pos - 1] == 0x01)
+                {
+                    // Once the packet is complete, validate it
+                    if (validateResponse(buffer, expectedCommand))
+                    {
+                        if (response)
+                        {
+                            memcpy(response, buffer, pos);
+                        }
+                        return true;
+                    }
+                    else
+                    {
+                        // If the response is invalid, output and return false
+                        if (_parent)
+                        {
+                            _parent->debugPrintHex("Invalid ACK-Response: ", buffer, pos); // Print the received ACK data for debugging
+                        }
+                        return false;
+                    }
+                }
+            }
+        }
+
+        // If the maximum packet length is exceeded, break out of the loop
+        if (pos >= maxPacketLength)
+        {
+            break;
+        }
+
+        yield(); // Ensure other tasks are not blocked
+    }
+
+    // Timeout or invalid response, print the received data
+    if (_parent && _parent->_debug_serial)
+    {
+        _parent->debugPrintHex("Timeout or invalid ACK-Response: ", buffer, pos); // Print the received data for debugging
+    }
+
+    return false; // Return false if no valid ACK was received
 }
 
 //===========================================
-// LD2410 Main Class Implementation
+// General
 //===========================================
 
 LD2410::LD2410() : _debug_serial(nullptr), _lastError(Error::NONE)
 {
-    _uart.init();
+    _uart.init(this);
     memset(&_basicData, 0, sizeof(_basicData));
     memset(&_engineeringData, 0, sizeof(_engineeringData));
     memset(&_outputObservation, 0, sizeof(_outputObservation));
@@ -361,7 +449,7 @@ bool LD2410::beginOutputObservation(uint8_t pin, void (*callback)(bool), uint8_t
     return true;
 }
 
-void LD2410::processUART(uint8_t maxBytesPerLoop)
+void LD2410::readSensorData(uint8_t maxBytesPerLoop)
 {
     if (!_uart.initialized)
     {
@@ -387,7 +475,7 @@ void LD2410::processUART(uint8_t maxBytesPerLoop)
     {
         if (_uart.frameProcessor.isAckFrame())
         {
-            // debugPrintHex("ACK FRAME: ", _uart.frameProcessor.getFrameData(), _uart.frameProcessor.getFrameLength());
+            debugPrintHex("[LD2410] Got unhandled ACK Frame: ", _uart.frameProcessor.getFrameData(), _uart.frameProcessor.getFrameLength());
         }
         else
         {
@@ -395,217 +483,6 @@ void LD2410::processUART(uint8_t maxBytesPerLoop)
             _uart.isEngineeringMode = (_uart.frameProcessor.getFrameData()[6] == 0x01);
         }
     }
-}
-
-bool LD2410::setMaxValues(uint8_t movingGate, uint8_t stationaryGate, uint16_t timeout)
-{
-    if (!validateGate(movingGate) || !validateGate(stationaryGate))
-    {
-        setError(Error::INVALID_PARAMETER);
-        return false;
-    }
-
-    if (!_uart.commandManager.enterConfigMode(*_uart.serial))
-    {
-        return false;
-    }
-
-    uint8_t cmd[] = {
-        0x14, 0x00,
-        0x60, 0x00,
-        0x00, 0x00,
-        movingGate, 0x00,
-        0x00, 0x00,
-        0x01, 0x00,
-        stationaryGate, 0x00,
-        0x00, 0x00,
-        0x02, 0x00,
-        (uint8_t)(timeout & 0xFF), (uint8_t)((timeout >> 8) & 0xFF),
-        0x00, 0x00};
-
-    bool success = _uart.commandManager.sendCommand(*_uart.serial, cmd, sizeof(cmd));
-
-    if (!_uart.commandManager.exitConfigMode(*_uart.serial))
-    {
-        return false;
-    }
-
-    return success;
-}
-
-bool LD2410::setGateSensitivityThreshold(uint8_t gate, uint8_t moving, uint8_t stationary)
-{
-    if (!validateGate(gate) ||
-        !validateSensitivity(moving) ||
-        !validateSensitivity(stationary))
-    {
-        setError(Error::INVALID_PARAMETER);
-        return false;
-    }
-
-    if (!_uart.commandManager.enterConfigMode(*_uart.serial))
-    {
-        return false;
-    }
-
-    uint8_t cmd[] = {
-        0x14, 0x00,
-        0x64, 0x00,
-        0x00, 0x00,
-        gate, 0x00,
-        0x00, 0x00,
-        0x01, 0x00,
-        moving, 0x00,
-        0x00, 0x00,
-        0x02, 0x00,
-        stationary, 0x00,
-        0x00, 0x00};
-
-    bool success = _uart.commandManager.sendCommand(*_uart.serial, cmd, sizeof(cmd));
-
-    if (!_uart.commandManager.exitConfigMode(*_uart.serial))
-    {
-        return false;
-    }
-
-    return success;
-}
-
-bool LD2410::enableEngineeringMode()
-{
-    if (!_uart.commandManager.enterConfigMode(*_uart.serial))
-    {
-        return false;
-    }
-
-    const uint8_t cmd[] = {0x02, 0x00, 0x62, 0x00};
-    bool success = _uart.commandManager.sendCommand(*_uart.serial, cmd, sizeof(cmd));
-
-    if (!_uart.commandManager.exitConfigMode(*_uart.serial))
-    {
-        return false;
-    }
-
-    if (success)
-    {
-        _uart.isEngineeringMode = true;
-        debugPrintln("[LD2410] Engineering mode enabled");
-    }
-
-    return success;
-}
-
-bool LD2410::disableEngineeringMode()
-{
-    if (!_uart.commandManager.enterConfigMode(*_uart.serial))
-    {
-        return false;
-    }
-
-    const uint8_t cmd[] = {0x02, 0x00, 0x63, 0x00};
-    bool success = _uart.commandManager.sendCommand(*_uart.serial, cmd, sizeof(cmd));
-
-    if (!_uart.commandManager.exitConfigMode(*_uart.serial))
-    {
-        return false;
-    }
-
-    if (success)
-    {
-
-        debugPrintln("[LD2410] Engineering mode disabled");
-    }
-
-    return success;
-}
-
-bool LD2410::setBaudRate(unsigned long baudRate)
-{
-    if (!_uart.commandManager.enterConfigMode(*_uart.serial))
-    {
-        return false;
-    }
-
-    uint8_t cmd[] = {0x04, 0x00, 0xA1, 0x00,
-                     (uint8_t)(baudRate & 0xFF),
-                     (uint8_t)((baudRate >> 8) & 0xFF)};
-
-    bool success = _uart.commandManager.sendCommand(*_uart.serial, cmd, sizeof(cmd));
-
-    if (!_uart.commandManager.exitConfigMode(*_uart.serial))
-    {
-        return false;
-    }
-
-    return success;
-}
-
-bool LD2410::setDistanceResolution(bool use020mResolution)
-{
-    if (!_uart.commandManager.enterConfigMode(*_uart.serial))
-    {
-        return false;
-    }
-
-    uint8_t cmd[] = {0x02, 0x00, 0xA0, 0x00,
-                     (uint8_t)(use020mResolution ? 0x01 : 0x00)};
-
-    bool success = _uart.commandManager.sendCommand(*_uart.serial, cmd, sizeof(cmd));
-
-    if (!_uart.commandManager.exitConfigMode(*_uart.serial))
-    {
-        return false;
-    }
-
-    return success;
-}
-
-bool LD2410::restart()
-{
-    if (!_uart.commandManager.enterConfigMode(*_uart.serial))
-    {
-        return false;
-    }
-
-    const uint8_t cmd[] = {0x02, 0x00, 0xA3, 0x00};
-    return _uart.commandManager.sendCommand(*_uart.serial, cmd, sizeof(cmd));
-    // No need to exit config mode as device will restart
-}
-
-bool LD2410::factoryReset()
-{
-    if (!_uart.commandManager.enterConfigMode(*_uart.serial))
-    {
-        return false;
-    }
-
-    const uint8_t cmd[] = {0x02, 0x00, 0xA2, 0x00};
-    bool success = _uart.commandManager.sendCommand(*_uart.serial, cmd, sizeof(cmd));
-
-    if (!_uart.commandManager.exitConfigMode(*_uart.serial))
-    {
-        return false;
-    }
-
-    return success;
-}
-
-bool LD2410::readConfiguration()
-{
-    if (!_uart.commandManager.enterConfigMode(*_uart.serial))
-    {
-        return false;
-    }
-
-    const uint8_t cmd[] = {0x02, 0x00, 0x61, 0x00};
-    bool success = _uart.commandManager.sendCommand(*_uart.serial, cmd, sizeof(cmd));
-
-    if (!_uart.commandManager.exitConfigMode(*_uart.serial))
-    {
-        return false;
-    }
-
-    return success;
 }
 
 void IRAM_ATTR LD2410::digitalOutputInterrupt(void *arg)
@@ -622,6 +499,16 @@ void IRAM_ATTR LD2410::digitalOutputInterrupt(void *arg)
     }
 }
 
+void LD2410::setError(Error error)
+{
+    _lastError = error;
+    if (_debug_serial)
+    {
+        debugPrint("Error: ");
+        debugPrintln(getLastErrorString());
+    }
+}
+
 void LD2410::useDebug(Stream &debugSerial)
 {
     _debug_serial = &debugSerial;
@@ -631,7 +518,7 @@ void LD2410::useDebug(Stream &debugSerial)
 void LD2410::prettyPrintData(Stream &output)
 {
     output.println("\n--------------------------------------------------");
-    output.println("LD2410 Basic Data");
+    output.println("LD2410 Data");
     output.println("--------------------------------------------------");
 
     output.print("Sensor Data Current: ");
@@ -726,6 +613,464 @@ const char *LD2410::getLastErrorString() const
     }
 }
 
+//===========================================
+// LD2410 Commands
+//===========================================
+
+bool LD2410::setMaxValues(uint8_t movingGate, uint8_t stationaryGate, uint16_t timeout)
+{
+    if (!_uart.initialized)
+    {
+        setError(Error::NOT_INITIALIZED);
+        return false;
+    }
+
+    if (!validateGate(movingGate) || !validateGate(stationaryGate))
+    {
+        setError(Error::INVALID_PARAMETER);
+        return false;
+    }
+
+    if (!_uart.commandManager.enterConfigMode(*_uart.serial))
+    {
+        setError(Error::COMMAND_FAILED);
+        return false;
+    }
+
+    const uint8_t cmd[] = {
+        0xFD, 0xFC, 0xFB, 0xFA,
+        0x14, 0x00,
+        0x60, 0x00,
+        0x00, 0x00,
+        movingGate, 0x00,
+        0x00, 0x00,
+        0x01, 0x00,
+        stationaryGate, 0x00,
+        0x00, 0x00,
+        0x02, 0x00,
+        (uint8_t)(timeout & 0xFF), (uint8_t)((timeout >> 8) & 0xFF),
+        0x00, 0x00,
+        0x04, 0x03, 0x02, 0x01};
+
+    _uart.commandManager.sendCommand(*_uart.serial, cmd, sizeof(cmd));
+
+    bool success = _uart.commandManager.waitForAck(*_uart.serial, 0x60, nullptr);
+    _uart.commandManager.exitConfigMode(*_uart.serial);
+
+    if (!success)
+    {
+        setError(Error::COMMAND_FAILED);
+    }
+
+    return success;
+}
+
+bool LD2410::setGateSensitivityThreshold(uint8_t gate, uint8_t moving, uint8_t stationary)
+{
+    if (!_uart.initialized)
+    {
+        setError(Error::NOT_INITIALIZED);
+        return false;
+    }
+
+    if (!validateGate(gate) || !validateSensitivity(moving) || !validateSensitivity(stationary))
+    {
+        setError(Error::INVALID_PARAMETER);
+        return false;
+    }
+
+    if (!_uart.commandManager.enterConfigMode(*_uart.serial))
+    {
+        setError(Error::COMMAND_FAILED);
+        return false;
+    }
+
+    const uint8_t cmd[] = {
+        0xFD, 0xFC, 0xFB, 0xFA,
+        0x14, 0x00,
+        0x64, 0x00,
+        0x00, 0x00,
+        gate, 0x00,
+        0x00, 0x00,
+        0x01, 0x00,
+        moving, 0x00,
+        0x00, 0x00,
+        0x02, 0x00,
+        stationary, 0x00,
+        0x00, 0x00,
+        0x04, 0x03, 0x02, 0x01};
+
+    _uart.commandManager.sendCommand(*_uart.serial, cmd, sizeof(cmd));
+
+    bool success = _uart.commandManager.waitForAck(*_uart.serial, 0x64, nullptr);
+    _uart.commandManager.exitConfigMode(*_uart.serial);
+
+    if (!success)
+    {
+        setError(Error::COMMAND_FAILED);
+    }
+
+    return success;
+}
+
+bool LD2410::enableEngineeringMode()
+{
+    if (!_uart.initialized)
+    {
+        setError(Error::NOT_INITIALIZED);
+        return false;
+    }
+
+    if (!_uart.commandManager.enterConfigMode(*_uart.serial))
+    {
+        setError(Error::COMMAND_FAILED);
+        return false;
+    }
+
+    const uint8_t cmd[] = {
+        0xFD, 0xFC, 0xFB, 0xFA,
+        0x02, 0x00,
+        0x62, 0x00,
+        0x04, 0x03, 0x02, 0x01};
+
+    _uart.commandManager.sendCommand(*_uart.serial, cmd, sizeof(cmd));
+
+    bool success = _uart.commandManager.waitForAck(*_uart.serial, 0x62, nullptr);
+
+    _uart.commandManager.exitConfigMode(*_uart.serial);
+
+    if (success)
+    {
+        _uart.isEngineeringMode = true;
+        debugPrintln("[LD2410] Engineering mode enabled");
+    }
+    else
+    {
+        setError(Error::COMMAND_FAILED);
+    }
+
+    return success;
+}
+
+bool LD2410::disableEngineeringMode()
+{
+    if (!_uart.initialized)
+    {
+        setError(Error::NOT_INITIALIZED);
+        return false;
+    }
+
+    if (!_uart.commandManager.enterConfigMode(*_uart.serial))
+    {
+        setError(Error::COMMAND_FAILED);
+        return false;
+    }
+
+    const uint8_t cmd[] = {
+        0xFD, 0xFC, 0xFB, 0xFA,
+        0x02, 0x00,
+        0x63, 0x00,
+        0x04, 0x03, 0x02, 0x01};
+
+    _uart.commandManager.sendCommand(*_uart.serial, cmd, sizeof(cmd));
+
+    bool success = _uart.commandManager.waitForAck(*_uart.serial, 0x63, nullptr);
+
+    _uart.commandManager.exitConfigMode(*_uart.serial);
+
+    if (success)
+    {
+        _uart.isEngineeringMode = false;
+        debugPrintln("[LD2410] Engineering mode disabled");
+    }
+    else
+    {
+        setError(Error::COMMAND_FAILED);
+    }
+
+    return success;
+}
+
+bool LD2410::setBaudRate(unsigned long baudRate)
+{
+    if (!_uart.initialized)
+    {
+        setError(Error::NOT_INITIALIZED);
+        return false;
+    }
+
+    if (!_uart.commandManager.enterConfigMode(*_uart.serial))
+    {
+        setError(Error::COMMAND_FAILED);
+        return false;
+    }
+
+    const uint8_t cmd[] = {
+        0xFD, 0xFC, 0xFB, 0xFA,
+        0x04, 0x00,
+        0xA1, 0x00,
+        (uint8_t)(baudRate & 0xFF),
+        (uint8_t)((baudRate >> 8) & 0xFF),
+        0x04, 0x03, 0x02, 0x01};
+
+    _uart.commandManager.sendCommand(*_uart.serial, cmd, sizeof(cmd));
+
+    bool success = _uart.commandManager.waitForAck(*_uart.serial, 0xA1, nullptr);
+    _uart.commandManager.exitConfigMode(*_uart.serial);
+
+    if (!success)
+    {
+        setError(Error::COMMAND_FAILED);
+    }
+
+    return success;
+}
+
+bool LD2410::setDistanceResolution(bool use020mResolution)
+{
+    if (!_uart.initialized)
+    {
+        setError(Error::NOT_INITIALIZED);
+        return false;
+    }
+
+    if (!_uart.commandManager.enterConfigMode(*_uart.serial))
+    {
+        setError(Error::COMMAND_FAILED);
+        return false;
+    }
+
+    const uint8_t cmd[] = {
+        0xFD, 0xFC, 0xFB, 0xFA,
+        0x02, 0x00,
+        0xAA, 0x00,
+        (uint8_t)(use020mResolution ? 0x01 : 0x00),
+        0x04, 0x03, 0x02, 0x01};
+
+    _uart.commandManager.sendCommand(*_uart.serial, cmd, sizeof(cmd));
+
+    bool success = _uart.commandManager.waitForAck(*_uart.serial, 0xAA, nullptr);
+    _uart.commandManager.exitConfigMode(*_uart.serial);
+
+    if (!success)
+    {
+        setError(Error::COMMAND_FAILED);
+    }
+
+    return success;
+}
+
+bool LD2410::factoryReset()
+{
+    if (!_uart.initialized)
+    {
+        setError(Error::NOT_INITIALIZED);
+        return false;
+    }
+
+    if (!_uart.commandManager.enterConfigMode(*_uart.serial))
+    {
+        setError(Error::COMMAND_FAILED);
+        return false;
+    }
+
+    const uint8_t cmd[] = {
+        0xFD, 0xFC, 0xFB, 0xFA,
+        0x02, 0x00,
+        0xA2, 0x00,
+        0x04, 0x03, 0x02, 0x01};
+
+    _uart.commandManager.sendCommand(*_uart.serial, cmd, sizeof(cmd));
+
+    bool success = _uart.commandManager.waitForAck(*_uart.serial, 0xA2, nullptr);
+    _uart.commandManager.exitConfigMode(*_uart.serial);
+
+    if (!success)
+    {
+        setError(Error::COMMAND_FAILED);
+    }
+
+    return success;
+}
+
+bool LD2410::restart()
+{
+    if (!_uart.initialized)
+    {
+        setError(Error::NOT_INITIALIZED);
+        return false;
+    }
+
+    if (!_uart.commandManager.enterConfigMode(*_uart.serial))
+    {
+        setError(Error::COMMAND_FAILED);
+        return false;
+    }
+
+    const uint8_t cmd[] = {
+        0xFD, 0xFC, 0xFB, 0xFA,
+        0x02, 0x00,
+        0xA3, 0x00,
+        0x04, 0x03, 0x02, 0x01};
+
+    _uart.commandManager.sendCommand(*_uart.serial, cmd, sizeof(cmd));
+
+    bool success = _uart.commandManager.waitForAck(*_uart.serial, 0xA3, nullptr);
+
+    if (!success)
+    {
+        setError(Error::COMMAND_FAILED);
+    }
+
+    return success;
+    // No exitConfigMode needed as device will restart
+}
+
+bool LD2410::readConfiguration()
+{
+    if (!_uart.initialized)
+    {
+        setError(Error::NOT_INITIALIZED);
+        return false;
+    }
+
+    if (!_uart.commandManager.enterConfigMode(*_uart.serial))
+    {
+        setError(Error::COMMAND_FAILED);
+        return false;
+    }
+
+    const uint8_t cmd[] = {
+        0xFD, 0xFC, 0xFB, 0xFA,
+        0x02, 0x00,
+        0x61, 0x00,
+        0x04, 0x03, 0x02, 0x01};
+
+    _uart.commandManager.sendCommand(*_uart.serial, cmd, sizeof(cmd));
+
+    bool success = _uart.commandManager.waitForAck(*_uart.serial, 0x61, nullptr);
+
+    _uart.commandManager.exitConfigMode(*_uart.serial);
+
+    if (!success)
+    {
+        setError(Error::COMMAND_FAILED);
+    }
+
+    return success;
+}
+
+String LD2410::getMacAddress()
+{
+    /*
+     * Returns a 6-byte identifier in MAC address format (XX:XX:XX:XX:XX:XX)
+     *
+     * Note: There are some inconsistencies regarding this function:
+     * 1. The manufacturer's documentation mentions a 3-byte address in big endian,
+     *    but the actual response contains 6 bytes
+     * 2. The returned bytes often contain patterns similar to the frame end bytes
+     * 3. It's unclear if this is actually a MAC address or just a device identifier
+     *
+     * This implementation follows the community standard (as used in albertnis/ld2410-configurator) taking bytes 10-15 from the response.
+     */
+    if (!_uart.initialized)
+    {
+        setError(Error::NOT_INITIALIZED);
+        return "Invalid";
+    }
+
+    if (!_uart.commandManager.enterConfigMode(*_uart.serial))
+    {
+        setError(Error::COMMAND_FAILED);
+        return "Invalid";
+    }
+
+    const uint8_t macCmd[] = {
+        0xFD, 0xFC, 0xFB, 0xFA,
+        0x04, 0x00,
+        0xA5, 0x00,
+        0x01, 0x00,
+        0x04, 0x03, 0x02, 0x01};
+
+    _uart.commandManager.sendCommand(*_uart.serial, macCmd, sizeof(macCmd));
+
+    uint8_t response[32];
+    if (_uart.commandManager.waitForAck(*_uart.serial, 0xA5, response))
+    {
+        char macStr[18];
+        snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+                 response[10], response[11], response[12],
+                 response[13], response[14], response[15]);
+
+        _uart.commandManager.exitConfigMode(*_uart.serial);
+        return String(macStr);
+    }
+
+    _uart.commandManager.exitConfigMode(*_uart.serial);
+    setError(Error::TIMEOUT);
+    return "Invalid";
+}
+
+String LD2410::getFirmwareVersion()
+{
+    if (!_uart.initialized)
+    {
+        setError(Error::NOT_INITIALIZED);
+        return "Invalid";
+    }
+
+    if (!_uart.commandManager.enterConfigMode(*_uart.serial))
+    {
+        setError(Error::COMMAND_FAILED);
+        return "Invalid";
+    }
+
+    const uint8_t cmd[] = {
+        0xFD, 0xFC, 0xFB, 0xFA,
+        0x02, 0x00,
+        0xA0, 0x00,
+        0x04, 0x03, 0x02, 0x01};
+
+    _uart.commandManager.sendCommand(*_uart.serial, cmd, sizeof(cmd));
+
+    uint8_t response[32];
+    if (_uart.commandManager.waitForAck(*_uart.serial, 0xA0, response))
+    {
+        uint8_t majorVersion = response[13];
+        uint8_t minorVersion = response[12];
+        uint8_t buildHigh = response[14];
+        uint8_t buildLow = response[15];
+
+        char versionStr[32];
+        snprintf(versionStr, sizeof(versionStr), "V%d.%02d.%d%02d",
+                 majorVersion,
+                 minorVersion,
+                 buildHigh,
+                 buildLow);
+
+        _uart.commandManager.exitConfigMode(*_uart.serial);
+        return String(versionStr);
+    }
+
+    _uart.commandManager.exitConfigMode(*_uart.serial);
+    setError(Error::TIMEOUT);
+    return "Invalid";
+}
+
+//===========================================
+// Utility Functions
+//===========================================
+
+bool LD2410::validateGate(uint8_t gate) const
+{
+    return gate <= LD2410_MAX_GATES;
+}
+
+bool LD2410::validateSensitivity(uint8_t sensitivity) const
+{
+    return sensitivity <= LD2410_MAX_SENSITIVITY;
+}
+
 void LD2410::debugPrint(const char *message)
 {
     if (_debug_serial)
@@ -739,36 +1084,6 @@ void LD2410::debugPrintln(const char *message)
     if (_debug_serial)
     {
         _debug_serial->println(message);
-    }
-}
-
-void LD2410::waitFor(unsigned long ms)
-{
-    unsigned long start = millis();
-    while (millis() - start < ms)
-    {
-        processUART(); // Continue processing data while waiting
-        yield();       // Allow other tasks to run
-    }
-}
-
-bool LD2410::validateGate(uint8_t gate) const
-{
-    return gate <= LD2410_MAX_GATES;
-}
-
-bool LD2410::validateSensitivity(uint8_t sensitivity) const
-{
-    return sensitivity <= LD2410_MAX_SENSITIVITY;
-}
-
-void LD2410::setError(Error error)
-{
-    _lastError = error;
-    if (_debug_serial)
-    {
-        debugPrint("Error: ");
-        debugPrintln(getLastErrorString());
     }
 }
 
@@ -786,230 +1101,4 @@ void LD2410::debugPrintHex(const char *prefix, const uint8_t *data, uint16_t len
         }
         _debug_serial->println();
     }
-}
-
-String LD2410::getMacAddress()
-{
-    if (!_uart.initialized)
-    {
-        setError(Error::NOT_INITIALIZED);
-        return "Invalid";
-    }
-
-    // Enter configuration mode
-    const uint8_t configCmd[] = {
-        0xFD, 0xFC, 0xFB, 0xFA,
-        0x04, 0x00,
-        0xFF, 0x00,
-        0x01, 0x00,
-        0x04, 0x03, 0x02, 0x01};
-
-    debugPrintln("[LD2410] Entering config mode for MAC query");
-    _uart.serial->write(configCmd, sizeof(configCmd));
-    _uart.serial->flush();
-    delay(100);
-
-    // Clear any response
-    while (_uart.serial->available())
-    {
-        _uart.serial->read();
-    }
-
-    // Send MAC request
-    const uint8_t macCmd[] = {
-        0xFD, 0xFC, 0xFB, 0xFA,
-        0x04, 0x00,
-        0xA5, 0x00,
-        0x01, 0x00,
-        0x04, 0x03, 0x02, 0x01};
-
-    debugPrintln("[LD2410] Requesting MAC address");
-    _uart.serial->write(macCmd, sizeof(macCmd));
-    _uart.serial->flush();
-    delay(50);
-
-    // Read Response
-    unsigned long start = millis();
-    uint8_t buffer[32];
-    size_t pos = 0;
-    bool headerFound = false;
-
-    while (millis() - start < 1000)
-    {
-        if (_uart.serial->available())
-        {
-            uint8_t byte = _uart.serial->read();
-
-            if (!headerFound && byte == 0xFD)
-            {
-                headerFound = true;
-                buffer[0] = byte;
-                pos = 1;
-                continue;
-            }
-
-            if (headerFound && pos < sizeof(buffer))
-            {
-                buffer[pos++] = byte;
-
-                if (pos >= 16)
-                {
-                    if (buffer[0] == 0xFD && buffer[1] == 0xFC &&
-                        buffer[2] == 0xFB && buffer[3] == 0xFA &&
-                        buffer[6] == 0xA5)
-                    {
-
-                        if (buffer[8] == 0x00 && buffer[9] == 0x00)
-                        {
-                            char macStr[18];
-                            snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
-                                     buffer[10], buffer[11], buffer[12],
-                                     buffer[13], buffer[14], buffer[15]);
-
-                            // Exit config mode
-                            const uint8_t exitCmd[] = {
-                                0xFD, 0xFC, 0xFB, 0xFA,
-                                0x02, 0x00,
-                                0xFE, 0x00,
-                                0x04, 0x03, 0x02, 0x01};
-                            _uart.serial->write(exitCmd, sizeof(exitCmd));
-                            _uart.serial->flush();
-
-                            debugPrintln("[LD2410] MAC address read successfully");
-                            return String(macStr);
-                        }
-                    }
-                }
-            }
-        }
-        yield();
-    }
-
-    // Exit config mode even on failure
-    const uint8_t exitCmd[] = {
-        0xFD, 0xFC, 0xFB, 0xFA,
-        0x02, 0x00,
-        0xFE, 0x00,
-        0x04, 0x03, 0x02, 0x01};
-    _uart.serial->write(exitCmd, sizeof(exitCmd));
-    _uart.serial->flush();
-
-    debugPrintln("[LD2410] Failed to read MAC address");
-    setError(Error::TIMEOUT);
-    return "Invalid";
-}
-
-String LD2410::getFirmwareVersion()
-{
-    if (!_uart.initialized)
-    {
-        setError(Error::NOT_INITIALIZED);
-        return "Invalid";
-    }
-
-    // Enter configuration mode
-    const uint8_t configCmd[] = {
-        0xFD, 0xFC, 0xFB, 0xFA,
-        0x04, 0x00,
-        0xFF, 0x00,
-        0x01, 0x00,
-        0x04, 0x03, 0x02, 0x01};
-
-    debugPrintln("[LD2410] Entering config mode for firmware query");
-    _uart.serial->write(configCmd, sizeof(configCmd));
-    _uart.serial->flush();
-    delay(100);
-
-    // Clear any response
-    while (_uart.serial->available())
-    {
-        _uart.serial->read();
-    }
-
-    // Send firmware version request
-    const uint8_t versionCmd[] = {
-        0xFD, 0xFC, 0xFB, 0xFA,
-        0x02, 0x00,
-        0xA0, 0x00, // Command für Firmware-Version
-        0x04, 0x03, 0x02, 0x01};
-
-    debugPrintln("[LD2410] Requesting firmware version");
-    _uart.serial->write(versionCmd, sizeof(versionCmd));
-    _uart.serial->flush();
-    delay(50);
-
-    // Read Response
-    unsigned long start = millis();
-    uint8_t buffer[32];
-    size_t pos = 0;
-    bool headerFound = false;
-
-    while (millis() - start < 1000)
-    {
-        if (_uart.serial->available())
-        {
-            uint8_t byte = _uart.serial->read();
-
-            if (!headerFound && byte == 0xFD)
-            {
-                headerFound = true;
-                buffer[0] = byte;
-                pos = 1;
-                continue;
-            }
-
-            if (headerFound && pos < sizeof(buffer))
-            {
-                buffer[pos++] = byte;
-
-                if (pos >= 16)
-                {
-                    if (buffer[0] == 0xFD && buffer[1] == 0xFC &&
-                        buffer[2] == 0xFB && buffer[3] == 0xFA &&
-                        buffer[6] == 0xA0)
-                    {
-
-                        if (buffer[8] == 0x00 && buffer[9] == 0x00)
-                        {
-                            // Format version according to protocol
-                            uint16_t firmwareType = buffer[10] | (buffer[11] << 8);
-                            uint16_t majorVersion = buffer[12] | (buffer[13] << 8);
-                            uint32_t minorVersion = buffer[14] | (buffer[15] << 8) |
-                                                    (buffer[16] << 16) | (buffer[17] << 24);
-
-                            char versionStr[32];
-                            snprintf(versionStr, sizeof(versionStr), "V%d.%02d.%d",
-                                     majorVersion, (minorVersion >> 16) & 0xFF, minorVersion & 0xFFFF);
-
-                            // Exit config mode
-                            const uint8_t exitCmd[] = {
-                                0xFD, 0xFC, 0xFB, 0xFA,
-                                0x02, 0x00,
-                                0xFE, 0x00,
-                                0x04, 0x03, 0x02, 0x01};
-                            _uart.serial->write(exitCmd, sizeof(exitCmd));
-                            _uart.serial->flush();
-
-                            debugPrintln("[LD2410] Firmware version read successfully");
-                            return String(versionStr);
-                        }
-                    }
-                }
-            }
-        }
-        yield();
-    }
-
-    // Exit config mode even on failure
-    const uint8_t exitCmd[] = {
-        0xFD, 0xFC, 0xFB, 0xFA,
-        0x02, 0x00,
-        0xFE, 0x00,
-        0x04, 0x03, 0x02, 0x01};
-    _uart.serial->write(exitCmd, sizeof(exitCmd));
-    _uart.serial->flush();
-
-    debugPrintln("[LD2410] Failed to read firmware version");
-    setError(Error::TIMEOUT);
-    return "Invalid";
 }
