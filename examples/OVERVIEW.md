@@ -137,6 +137,8 @@ Output pin state: HIGH
 - Modifying gate sensitivities
 - Verifying persistence after restart
 
+## Console Output
+
 ```console
 Build:Mar 27 2021
 rst:0x15 (USB_UART_CHIP_RESET),boot:0x2b (SPI_FAST_FLASH_BOOT)
@@ -206,4 +208,46 @@ Waiting 5 seconds for sensor to restart...
 Reading new configuration...
 Error: Command failed
 Failed to read new configuration
+```
+
+# Example: Reading Sensor Information
+
+`sensorInfoExample.cpp`
+
+## Demonstrates
+
+- Getting MAC address
+- Getting firmware version
+- Proper error handling
+- Debug output configuration
+
+> [!WARNING]  
+> MAC Address Implementation Notes:
+>
+> - The manufacturer's documentation mentions a 3-byte address in big endian
+> - The actual response contains 6 bytes
+> - The returned bytes often contain patterns similar to frame end bytes
+>
+> Issue needs further investigation.
+
+## Console Output
+
+```console
+Build:Mar 27 2021
+rst:0x15 (USB_UART_CHIP_RESET),boot:0x2b (SPI_FAST_FLASH_BOOT)
+Saved PC:0x40378be1
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce3808,len:0x4bc
+load:0x403c9700,len:0xbd8
+load:0x403cc700,len:0x2a0c
+entry 0x403c98d0
+[LD2410 DEBUGGER] Debug mode enabled
+[LD2410 DEBUGGER] UART initialized successfully
+
+=========================================
+Sensor Information
+=========================================
+MAC Address: 08:05:04:03:02:01
+Firmware Version: V2.05.1606
 ```
