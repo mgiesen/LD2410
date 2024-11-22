@@ -50,22 +50,68 @@ public:
         MOVING_AND_STATIONARY = 0x03
     };
 
-    // Data structure for basic sensor data
     struct BasicData
     {
         TargetState targetState;
-        uint16_t movingTargetDistance;                                                                                // in cm
-        uint8_t movingTargetEnergy;                                                                                   // 0-100
-        uint16_t stationaryTargetDistance;                                                                            // in cm
-        uint8_t stationaryTargetEnergy;                                                                               // 0-100
-        uint16_t detectionDistance;                                                                                   // in cm
-        uint8_t lightSensorValue;                                                                                     // 0-255
-        bool outPinState;                                                                                             // true = occupied
-        unsigned long lastSensorDataUpdate;                                                                           // in ms
-        bool isBasicDataCurrent(const int timeout = 1500) const { return millis() - lastSensorDataUpdate < timeout; } // Warning: millis() overflow can cause false validation results. Considered low risk and low priority.
+        uint16_t movingTargetDistance;
+        uint8_t movingTargetEnergy;
+        uint16_t stationaryTargetDistance;
+        uint8_t stationaryTargetEnergy;
+        uint16_t detectionDistance;
+        uint8_t lightSensorValue;
+        bool outPinState;
+        unsigned long lastSensorDataUpdate;
+
+        bool isBasicDataCurrent(const int timeout = 1500) const
+        {
+            return millis() - lastSensorDataUpdate < timeout;
+        }
+
+        void printOut(Stream &serial) const
+        {
+            serial.println(F("\n=== Basic Sensor Data ==="));
+            serial.print(F("Target State: "));
+            switch (targetState)
+            {
+            case TargetState::NO_TARGET:
+                serial.println(F("No Target"));
+                break;
+            case TargetState::MOVING:
+                serial.println(F("Moving"));
+                break;
+            case TargetState::STATIONARY:
+                serial.println(F("Stationary"));
+                break;
+            case TargetState::MOVING_AND_STATIONARY:
+                serial.println(F("Moving & Stationary"));
+                break;
+            }
+
+            serial.print(F("Moving Target - Distance: "));
+            serial.print(movingTargetDistance);
+            serial.print(F(" cm, Energy: "));
+            serial.println(movingTargetEnergy);
+
+            serial.print(F("Stationary Target - Distance: "));
+            serial.print(stationaryTargetDistance);
+            serial.print(F(" cm, Energy: "));
+            serial.println(stationaryTargetEnergy);
+
+            serial.print(F("Detection Distance: "));
+            serial.print(detectionDistance);
+            serial.println(F(" cm"));
+
+            serial.print(F("Light Sensor Value: "));
+            serial.println(lightSensorValue);
+
+            serial.print(F("Output Pin: "));
+            serial.println(outPinState ? F("Occupied") : F("Unoccupied"));
+
+            serial.print(F("Data Current: "));
+            serial.println(isBasicDataCurrent() ? F("Yes") : F("No"));
+        }
     };
 
-    // Data structure for advanced sensor data
     struct EngineeringData : public BasicData
     {
         uint8_t maxMovingGate;
@@ -73,7 +119,90 @@ public:
         uint8_t movingEnergyGates[LD2410_MAX_GATES];
         uint8_t stationaryEnergyGates[LD2410_MAX_GATES];
         unsigned long lastEngineeringDataUpdate;
-        bool isEngineeringDataCurrent(const int timeout = 1500) const { return millis() - lastEngineeringDataUpdate < timeout; } // Warning: millis() overflow can cause false validation results. Considered low risk and low priority.
+
+        bool isEngineeringDataCurrent(const int timeout = 1500) const
+        {
+            return millis() - lastEngineeringDataUpdate < timeout;
+        }
+
+        void printOut(Stream &serial) const
+        {
+            BasicData::printOut(serial);
+
+            serial.println(F("\n=== Engineering Data ==="));
+            serial.print(F("Max Moving Gate: "));
+            serial.println(maxMovingGate);
+            serial.print(F("Max Stationary Gate: "));
+            serial.println(maxStationaryGate);
+
+            serial.println(F("\nMoving Energy Gates:"));
+            for (int i = 0; i < LD2410_MAX_GATES; i++)
+            {
+                serial.print(F("Gate "));
+                serial.print(i);
+                serial.print(F(": "));
+                serial.println(movingEnergyGates[i]);
+            }
+
+            serial.println(F("\nStationary Energy Gates:"));
+            for (int i = 0; i < LD2410_MAX_GATES; i++)
+            {
+                serial.print(F("Gate "));
+                serial.print(i);
+                serial.print(F(": "));
+                serial.println(stationaryEnergyGates[i]);
+            }
+
+            serial.print(F("\nEngineering Data Current: "));
+            serial.println(isEngineeringDataCurrent() ? F("Yes") : F("No"));
+        }
+    };
+
+    struct ConfigurationData
+    {
+        uint8_t maxDistanceGate;
+        uint8_t configuredMaxMotionGate;
+        uint8_t configuredMaxStationaryGate;
+        uint8_t motionSensitivity[9];
+        uint8_t stationarySensitivity[9];
+        uint16_t noOccupancyDuration;
+        unsigned long lastConfigurationgDataUpdate;
+
+        void printOut(Stream &serial) const
+        {
+            serial.println(F("\n=== Configuration Data ==="));
+            serial.print(F("Max Distance Gate: "));
+            serial.println(maxDistanceGate);
+            serial.print(F("Configured Max Motion Gate: "));
+            serial.println(configuredMaxMotionGate);
+            serial.print(F("Configured Max Stationary Gate: "));
+            serial.println(configuredMaxStationaryGate);
+            serial.print(F("No Occupancy Duration: "));
+            serial.print(noOccupancyDuration);
+            serial.println(F(" seconds"));
+
+            serial.println(F("\nMotion Sensitivity:"));
+            for (int i = 0; i < 9; i++)
+            {
+                serial.print(F("Gate "));
+                serial.print(i);
+                serial.print(F(": "));
+                serial.println(motionSensitivity[i]);
+            }
+
+            serial.println(F("\nStationary Sensitivity:"));
+            for (int i = 0; i < 9; i++)
+            {
+                serial.print(F("Gate "));
+                serial.print(i);
+                serial.print(F(": "));
+                serial.println(stationarySensitivity[i]);
+            }
+
+            serial.print(F("Configuration Data Age: "));
+            serial.print(millis() - lastConfigurationgDataUpdate);
+            serial.println(F(" ms"));
+        }
     };
 
     LD2410();
@@ -98,6 +227,7 @@ public:
 
     const BasicData &getBasicData() const { return _basicData; }
     const EngineeringData &getEngineeringData() const { return _engineeringData; }
+    const ConfigurationData &getCurrentConfiguration() const { return _currentConfig; }
     void prettyPrintData(Stream &output);
     const char *getLastErrorString() const;
 
@@ -118,7 +248,6 @@ public:
     bool readConfiguration();
 
 private:
-    // Declare CommandManager as a friend class
     friend class CommandManager;
 
     class CircularBuffer
@@ -216,6 +345,7 @@ private:
     Error _lastError;
     BasicData _basicData;
     EngineeringData _engineeringData;
+    ConfigurationData _currentConfig;
 
     //===========================================
     // Internal Utility Functions

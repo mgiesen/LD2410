@@ -948,16 +948,32 @@ bool LD2410::readConfiguration()
 
     _uart.commandManager.sendCommand(*_uart.serial, cmd, sizeof(cmd));
 
-    bool success = _uart.commandManager.waitForAck(*_uart.serial, 0x61, nullptr);
-
-    _uart.commandManager.exitConfigMode(*_uart.serial);
-
-    if (!success)
+    uint8_t response[64];
+    if (_uart.commandManager.waitForAck(*_uart.serial, 0x61, response))
     {
-        setError(Error::COMMAND_FAILED);
+        if (response[10] == 0xAA)
+        {
+            _currentConfig.maxDistanceGate = response[11];
+            _currentConfig.configuredMaxMotionGate = response[12];
+            _currentConfig.configuredMaxStationaryGate = response[13];
+
+            for (int i = 0; i < 9; i++)
+            {
+                _currentConfig.motionSensitivity[i] = response[14 + i];
+                _currentConfig.stationarySensitivity[i] = response[23 + i];
+            }
+
+            _currentConfig.noOccupancyDuration = response[32] | (response[33] << 8);
+            _currentConfig.lastConfigurationgDataUpdate = millis();
+
+            _uart.commandManager.exitConfigMode(*_uart.serial);
+            return true;
+        }
     }
 
-    return success;
+    _uart.commandManager.exitConfigMode(*_uart.serial);
+    setError(Error::COMMAND_FAILED);
+    return false;
 }
 
 String LD2410::getMacAddress()
