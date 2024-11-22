@@ -4,8 +4,6 @@
 
 While working with the LD2410, I noticed that data communication frequently stops under specific conditions. To investigate the issue, I simplified the setup and monitored both the UART data output and the state of a physical LED connected to the output pin. I observed that data transmission is interrupted whenever the output pin goes HIGH, causing the LED to turn on.
 
-Additionally, I noticed erratic behavior: even when the setup maintains a safe distance where the output isn’t triggered, the TX LED on the MCU indicates an inconsistent data stream. In some cases, the transmission is interrupted sporadically and may stop entirely for extended periods.
-
 To analyze the problem further, I implemented an interrupt routine to monitor the output pin. To better visualize the issues, I recorded multiple test cases and used the timestamps to plot the behavior as diagrams.
 
 ## Hardware Setup
