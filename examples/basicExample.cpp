@@ -10,14 +10,17 @@ void setup()
     while (!Serial)
         delay(10);
 
+    // Enable debug output
     ld2410.useDebug(Serial);
 
+    // Initialize the UART interface
     if (!ld2410.beginUART(18, 17, Serial2))
     {
         Serial.println("Failed to initialize UART");
         return;
     }
 
+    // Getting the MAC address and firmware version
     String mac = ld2410.getMacAddress();
     Serial.print("Sensor MAC Address: ");
     Serial.println(mac);
@@ -26,6 +29,7 @@ void setup()
     Serial.print("Firmware Version: ");
     Serial.println(version);
 
+    // Enable engineering mode
     if (!ld2410.enableEngineeringMode())
     {
         Serial.println("Failed to enable engineering mode");
@@ -34,7 +38,7 @@ void setup()
 
 void loop()
 {
-    ld2410.processUART();
+    ld2410.readSensorData();
 
     static unsigned long lastPrint = 0;
     if (millis() - lastPrint >= 2000)
