@@ -1,15 +1,55 @@
-# basicExample
+# Example: UART reading basic data
 
-## Features
+`basicExample.cpp`
 
-- Reads MAC-Address
-- Reads firmware version
-- Enables Engineering Mode
-- Reads and print sensor data
+## Demonstrates
+
+- Starting UART interface
+- Starting debugging
+- Reading and printing basic sensor data
 
 ## Console Output
 
+```console
+ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0x15 (USB_UART_CHIP_RESET),boot:0x2b (SPI_FAST_FLASH_BOOT)
+Saved PC:0x40378be1
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce3808,len:0x4bc
+load:0x403c9700,len:0xbd8
+load:0x403cc700,len:0x2a0c
+entry 0x403c98d0
+[LD2410 DEBUGGER] Debug mode enabled
+[LD2410 DEBUGGER] UART initialized successfully
+
+=========================================
+Basic Data
+=========================================
+Target State: Stationary
+Moving Target - Distance: 84 cm, Energy: 0
+Stationary Target - Distance: 84 cm, Energy: 100
+Detection Distance: 70 cm
+Light Sensor Value: 103
+Output Pin: Occupied
+Data Age: 73 ms
 ```
+
+# Example: UART reading basic data
+
+`engineeringExample.cpp`
+
+## Demonstrates
+
+- Starting UART interface
+- Starting debugging
+- Enable Engineering Mode
+- Reading and printing engineering sensor data
+
+## Console Output
+
+```console
 ESP-ROM:esp32s3-20210327
 Build:Mar 27 2021
 rst:0x1 (POWERON),boot:0x2b (SPI_FAST_FLASH_BOOT)
@@ -19,22 +59,9 @@ load:0x3fce3808,len:0x4bc
 load:0x403c9700,len:0xbd8
 load:0x403cc700,len:0x2a0c
 entry 0x403c98d0
-Debug mode enabled
+[LD2410 DEBUGGER] Debug mode enabled
 [LD2410 DEBUGGER] UART initialized successfully
-Sensor MAC Address: 08:05:04:03:02:01
-Firmware Version: V2.05.1606
 [LD2410 DEBUGGER] Engineering mode enabled
-
-=========================================
-Basic Data
-=========================================
-Target State: Stationary
-Moving Target - Distance: 75 cm, Energy: 0
-Stationary Target - Distance: 189 cm, Energy: 100
-Detection Distance: 100 cm
-Light Sensor Value: 0
-Output Pin: Unoccupied
-Data Age: 46 ms
 
 =========================================
 Engineering Data
@@ -43,14 +70,14 @@ Max Moving Gate: 8
 Max Stationary Gate: 8
 
 Moving Energy Gates:
-Gate 0: 26
-Gate 1: 18
+Gate 0: 18
+Gate 1: 34
 Gate 2: 19
-Gate 3: 27
-Gate 4: 14
-Gate 5: 12
-Gate 6: 9
-Gate 7: 5
+Gate 3: 36
+Gate 4: 13
+Gate 5: 10
+Gate 6: 6
+Gate 7: 4
 
 Stationary Energy Gates:
 Gate 0: 0
@@ -59,7 +86,124 @@ Gate 2: 100
 Gate 3: 100
 Gate 4: 100
 Gate 5: 100
-Gate 6: 51
-Gate 7: 31
-Data Age: 79 ms
+Gate 6: 100
+Gate 7: 100
+Data Age: 63 ms
+```
+
+# Example: UART reading basic data
+
+`outputPinExample.cpp`
+
+## Demonstrates
+
+- Starting output pin monitoring
+- Starting debugging
+- Printing message on state changes
+
+## Console Output
+
+```console
+ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0x1 (POWERON),boot:0x2b (SPI_FAST_FLASH_BOOT)
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce3808,len:0x4bc
+load:0x403c9700,len:0xbd8
+load:0x403cc700,len:0x2a0c
+entry 0x403c98d0
+[LD2410 DEBUGGER] Debug mode enabled
+[LD2410 DEBUGGER] Output observation started successfully
+Output pin state: LOW
+Output pin state: HIGH
+```
+
+# readAndModifyConfig
+
+> [!WARNING]  
+> Issue identified in sensor responses after restart:
+>
+> - Before restart:
+>   FD FC FB FA 1C 00 61 01 00 00 AA 08 08 08 32 32 32 32 32 32 32 32 32 28 28 28 28 28 28 28 28 28
+> - After restart:
+>   FD FC FB FA 1A 00 61 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+>
+> Issue needs further investigation.
+
+## Demonstrates
+
+- Reading sensor configuration
+- Modifying gate sensitivities
+- Verifying persistence after restart
+
+```console
+Build:Mar 27 2021
+rst:0x15 (USB_UART_CHIP_RESET),boot:0x2b (SPI_FAST_FLASH_BOOT)
+Saved PC:0x40378c43
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce3808,len:0x4bc
+load:0x403c9700,len:0xbd8
+load:0x403cc700,len:0x2a0c
+entry 0x403c98d0
+-----------------------------------------------------------------------------------------
+This example demonstrates reading, modifying and verifying persistent sensor settings
+It reads the initial configuration, modifies all gate sensitivities,
+restarts the sensor, and verifies if changes persisted through the restart
+-----------------------------------------------------------------------------------------
+Debug mode enabled
+[LD2410 DEBUGGER] UART initialized successfully
+Reading initial configuration...
+
+=========================================
+Configuration Data
+=========================================
+Max Distance Gate: 8
+Configured Max Motion Gate: 8
+Configured Max Stationary Gate: 8
+No Occupancy Duration: 5 seconds
+
+Motion Sensitivity:
+Gate 0: 50
+Gate 1: 50
+Gate 2: 50
+Gate 3: 50
+Gate 4: 50
+Gate 5: 50
+Gate 6: 50
+Gate 7: 50
+Gate 8: 50
+
+Stationary Sensitivity:
+Gate 0: 40
+Gate 1: 40
+Gate 2: 40
+Gate 3: 40
+Gate 4: 40
+Gate 5: 40
+Gate 6: 40
+Gate 7: 40
+Gate 8: 40
+
+Data Age: 46 ms
+
+Modifying all gate sensitivities...
+Set gate 0
+Set gate 1
+Set gate 2
+Set gate 3
+Set gate 4
+Set gate 5
+Set gate 6
+Set gate 7
+Set gate 8
+
+Restarting sensor, to proove that the changes are persistent...
+Waiting 5 seconds for sensor to restart...
+[LD2410 DEBUGGER] UART initialized successfully
+
+Reading new configuration...
+Error: Command failed
+Failed to read new configuration
 ```

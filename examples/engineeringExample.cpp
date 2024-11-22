@@ -16,6 +16,11 @@ void setup()
         Serial.println("UART initialization failed");
         return;
     }
+
+    if (!ld2410.enableEngineeringMode())
+    {
+        Serial.println("Failed to enable engineering mode");
+    }
 }
 
 void loop()
@@ -25,8 +30,8 @@ void loop()
     static unsigned long lastPrint = 0;
     if (millis() - lastPrint >= 2500)
     {
-        const auto &basicData = ld2410.getBasicData();
-        basicData.printOut(Serial);
+        const auto &engData = ld2410.getEngineeringData();
+        engData.printOut(Serial);
         lastPrint = millis();
     }
 

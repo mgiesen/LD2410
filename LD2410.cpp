@@ -422,12 +422,6 @@ bool LD2410::beginUART(uint8_t mcu_rx_pin, uint8_t mcu_tx_pin, HardwareSerial &s
 
 bool LD2410::beginOutputObservation(uint8_t pin, void (*callback)(bool), uint8_t pin_mode_option)
 {
-    if (callback == nullptr)
-    {
-        debugPrintln("[LD2410 DEBUGGER] Callback can't be null. Output observation not started");
-        return false;
-    }
-
     // Disable existing interrupt if any
     if (_outputObservation.started)
     {
@@ -513,7 +507,7 @@ void LD2410::setError(Error error)
 void LD2410::useDebug(Stream &debugSerial)
 {
     _debug_serial = &debugSerial;
-    debugPrintln("Debug mode enabled");
+    debugPrintln("[LD2410 DEBUGGER] Debug mode enabled");
 }
 
 const char *LD2410::getLastErrorString() const
@@ -877,6 +871,7 @@ bool LD2410::readConfiguration()
     uint8_t response[64];
     if (_uart.commandManager.waitForAck(*_uart.serial, 0x61, response))
     {
+        debugPrintHex("[LD2410 DEBUGGER] Configuration response: ", response, 32);
         if (response[10] == 0xAA)
         {
             _currentConfig.maxDistanceGate = response[11];
