@@ -15,8 +15,8 @@
 #include <Arduino.h>
 
 // Protocol Constants
-#define LD2410_BUFFER_SIZE 1024
-#define LD2410_MAX_FRAME_LENGTH 1024
+#define LD2410_BUFFER_SIZE 120
+#define LD2410_MAX_FRAME_LENGTH 60
 #define LD2410_COMMAND_TIMEOUT 2000
 #define LD2410_CONFIG_DELAY 100
 

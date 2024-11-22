@@ -155,77 +155,37 @@ When the LD2410 sensor operates in Engineering Mode, it transmits additional det
 
 # Technical Notes
 
-## Important Notes on Serial Buffer Management
+## UART Communication Strategy
 
-### Background
+- **Frame Types**: The LD2410 sensor communicates using two types of data frames:
 
-The LD2410 sensor transmits data frames at regular intervals (approximately every 50ms):
+  - **Sensor Data Frames**: Regularly sent at ~50 ms intervals in non-config mode.
+  - **Command Acknowledgment Frames (ACK)**: Handled synchronously within the command execution logic.
 
-- Standard Data Frame: ~20 bytes
-- Engineering Mode Frame: ~40 bytes
-- ACK Frames: ~10-30 bytes
+- **Blocking Behavior**:
 
-### Potential Issues
+  - Command execution is blocking, potentially halting the main loop for up to two seconds due to a timeout mechanism.
+  - Ensure time-critical tasks can accommodate this delay while sending commands to the sensor
 
-Due to the high default data rate at 256000 baud, there's a risk of losing data if the serial buffer fills up. This can happen if:
+- **Data Handling**:
+  - `readSensorData()`: Reads data from the UART buffer, processes valid sensor data frames, and ignores ACK frames.
+  - Commands are executed inline, preventing `readSensorData()` from processing command-related frames.
 
-- The main loop runs too slowly
-- Other tasks block the processing
-- The hardware serial buffer is too small
+### Buffer Handling and Frame Loss
 
-### Recommendations
+At the high default baud rate of 256000, the UART buffer can overwrite older data if `readSensorData()` is not called frequently enough to process incoming frames. This can result in the loss of short-lived events or intermediate frames.
 
-1. **Reduce Sensor Baud Rate**  
-    If your application doesn't require high update rates, you can lower the sensor's baud rate to reduce data throughput. This gives you more time to process the data and reduces the risk of buffer overflow.
-   Note: The sensor needs to be restarted for the new baud rate to take effect.
+The ring buffer architecture mitigates this by ensuring that `readSensorData()` always processes the latest available data. The buffer is sized to hold approximately two engineering data frames, ensuring that complete frames are captured during normal operation.
 
-   ```cpp
-   radar.setBaudRate(115200);
-   ```
+### Timestamp Management (`lastSensorDataUpdate` and `lastEngineeringDataUpdate`)
 
-1. **Increase Hardware Serial Buffer (Recommended)**  
-   Increase buffer size before starting UART connection.
+- **Purpose**: Track the freshness of data updates.
+  - `lastSensorDataUpdate`: Timestamp of the last basic data update.
+  - `lastEngineeringDataUpdate`: Timestamp of the last engineering data update.
+- **Timeout Management**:
 
-   ```cpp
-   Serial2.setRxBufferSize(512);
-   ```
+  - Use `isBasicDataCurrent()` and `isEngineeringDataCurrent()` to verify if the data is up-to-date.
+  - Functions allow specifying a custom timeout duration; otherwise, a default value applies.
 
-1. **Process Data Frequently**  
-   Ensure `processUART()` is called regularly in your main loop. Long delays or blocking operations can cause buffer overflow and data loss:
-
-1. **Increase Processing Batch Size**  
-   By default, `processUART()` processes up to 32 bytes per call to balance responsiveness with other tasks. For applications with less time-critical operations, you can increase this limit. Note: Higher values mean longer processing time per call but more efficient buffer handling. Lower values provide better responsiveness for other tasks but require more frequent calls.
-   ```cpp
-   sensor.processUART(128);
-   ```
-
-**Calculate Maximum Safe Loop Delay**
-
-You can calculate the maximum safe delay between `processUART()` calls for your configuration:
-
-```cpp
-const uint16_t hwBufferSize = 512;    // Hardware buffer (bytes)
-const uint8_t batchSize = 32;         // Bytes processed per processUART() call
-const uint32_t baudRate = 256000;     // Sensor baud rate
-const float safetyMargin = 0.8f;      // 20% safety margin for timing variations
-
-// Calculations
-const float bytesPerSecond = baudRate / 10.0f;  // Each byte needs 10 bits in UART communication (8 data + start + stop)
-const float timeToFillBuffer = (hwBufferSize / bytesPerSecond) * 1000.0f;  // Time in ms until HW buffer is full
-const float bytesPerLoop = batchSize;  // How many bytes we process per call
-
-// Maximum delay calculation
-const float maxLoopDelay = (timeToFillBuffer * safetyMargin * bytesPerLoop) / hwBufferSize;
-
-// Example with default values:
-// - HW Buffer: 512 bytes
-// - Batch Size: 32 bytes
-// - Baud Rate: 256000
-// = ~1.6ms maximum delay between processUART() calls
-```
-
-## lastSensorDataUpdate and lastEngineeringDataUpdate
-
-The `BasicData` and `EngineeringData` are updated by parsing data from the LD2410's serial connection. Occasionally, the sensor may stop transmitting new data. To monitor data freshness, the `lastSensorDataUpdate` and `lastEngineeringDataUpdate` variables store the timestamp (in milliseconds) of the last update. Users can verify data currency using the `isBasicDataCurrent()` and `isEngineeringDataCurrent()` functions. The timeout duration for declaring data as outdated can be defined by the user by passing a specific timeout value to the function. If not specified, a default timeout will be applied.
-
-The timestamp is generated using the `millis()` function, which counts milliseconds since the MCU started running the current program. However, `millis()` will overflow and reset to zero after approximately 50 days. This overflow will render the timestamp invalid.
+- **Limitations**:
+  - The `millis()` function, used for timestamps, overflows after ~50 days, resetting to zero. This overflow can invalidate timestamp comparisons, but the library prioritizes critical functionality and ignores updates older than the overflow duration. As a result, the issue is deprioritized in typical usage scenarios.
