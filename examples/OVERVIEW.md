@@ -1,4 +1,4 @@
-# Example: UART reading basic data
+# Example: Reading basic data
 
 `basicExample.cpp`
 
@@ -36,7 +36,7 @@ Output Pin: Occupied
 Data Age: 73 ms
 ```
 
-# Example: UART reading basic data
+# Example: Reading engineering data
 
 `engineeringExample.cpp`
 
@@ -91,7 +91,7 @@ Gate 7: 100
 Data Age: 63 ms
 ```
 
-# Example: UART reading basic data
+# Example: Reading state of out pin
 
 `outputPinExample.cpp`
 
@@ -119,7 +119,9 @@ Output pin state: LOW
 Output pin state: HIGH
 ```
 
-# readAndModifyConfig
+# Example: Read and modify sensor configuration
+
+`readAndModifyConfig.cpp`
 
 > [!WARNING]  
 > Issue identified in sensor responses after restart:
