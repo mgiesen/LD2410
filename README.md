@@ -53,7 +53,7 @@ setup()
 
 loop()
 {
-    sensor.processUART();
+    sensor.readSensorData();
 
     LD2410::BasicData basicData = ld2410.getBasicData();
     Serial.println("Detection Distance: " + String(basicData.detectionDistance) + " cm");
@@ -65,7 +65,7 @@ loop()
 ```cpp
 sensor.beginUART(rx_pin, tx_pin, serial, baud);                     // Initialize UART communication with the sensor
 sensor.useDebug(serialPort);                                        // Enable debugging output to specified serial port
-sensor.processUART(maxBytesPerLoop);                                // Process incoming UART data, max bytes per loop iteration
+sensor.readSensorData(maxBytesPerLoop);                             // Process incoming UART data
 sensor.getBasicData();                                              // Get latest basic sensor data
 sensor.getEngineeringData();                                        // Get latest engineering sensor data
 sensor.prettyPrintData(output);                                     // Pretty print current sensor data to output stream
@@ -147,21 +147,10 @@ When the LD2410 sensor operates in Engineering Mode, it transmits additional det
   - **Light Sensor Value (1 byte)**: Reports a value in the range of 0–255 representing detected light intensity (if applicable).
   - **OUT Pin State (1 byte)**: Indicates the state of the OUT pin (0 for no target, 1 for target detected).
 
-## Default Sensitivity Settings
-
-| Gate | Motion | Stationary |
-| ---- | ------ | ---------- |
-| 0,1  | 50     | N/A        |
-| 2    | 40     | 40         |
-| 3    | 30     | 40         |
-| 4    | 20     | 30         |
-| 5    | 15     | 30         |
-| 6-8  | 15     | 20         |
-
 ## Protocol Rules
 
-1. All commands require Enable Config (0x00FF) first
-1. All commands must be followed by End Config (0x00FE)
+1. All commands require Enable Config first
+1. All commands must be followed by End Config
 1. All multi-byte values are little-endian
 
 # Technical Notes
@@ -172,9 +161,9 @@ When the LD2410 sensor operates in Engineering Mode, it transmits additional det
 
 The LD2410 sensor transmits data frames at regular intervals (approximately every 50ms):
 
-- Standard Data Frame: ~19 bytes
+- Standard Data Frame: ~20 bytes
 - Engineering Mode Frame: ~40 bytes
-- ACK Frames: 8-12 bytes
+- ACK Frames: ~10-30 bytes
 
 ### Potential Issues
 
@@ -240,27 +229,3 @@ const float maxLoopDelay = (timeToFillBuffer * safetyMargin * bytesPerLoop) / hw
 The `BasicData` and `EngineeringData` are updated by parsing data from the LD2410's serial connection. Occasionally, the sensor may stop transmitting new data. To monitor data freshness, the `lastSensorDataUpdate` and `lastEngineeringDataUpdate` variables store the timestamp (in milliseconds) of the last update. Users can verify data currency using the `isBasicDataCurrent()` and `isEngineeringDataCurrent()` functions. The timeout duration for declaring data as outdated can be defined by the user by passing a specific timeout value to the function. If not specified, a default timeout will be applied.
 
 The timestamp is generated using the `millis()` function, which counts milliseconds since the MCU started running the current program. However, `millis()` will overflow and reset to zero after approximately 50 days. This overflow will render the timestamp invalid.
-
-## Command Acknowledgment (Not fully implemented yet)
-
-Currently, commands are sent without verifying successful execution. In future versions, we will implement a robust command verification process:
-
-1. **Current Implementation**
-
-- Commands are sent without waiting for acknowledgment
-- Success is assumed if no error occurs during transmission
-
-2. **Planned Implementation**
-
-```mermaid
-flowchart TD
-Start["Start"] --> |Enable config| ACK1{ACK?}
-ACK1 -->|Yes| Cmd["Send command(s)"]
-ACK1 -->|No| Finish["Finish"]
-Cmd --> ACK2{ACK?}
-ACK2 -->|Yes| EndCmd["End config"]
-ACK2 -->|No| Finish
-EndCmd --> ACK3{ACK?}
-ACK3 -->|Yes| Finish
-ACK3 -->|No| Finish
-```
