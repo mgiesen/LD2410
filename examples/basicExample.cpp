@@ -41,10 +41,12 @@ void loop()
     ld2410.readSensorData();
 
     static unsigned long lastPrint = 0;
-    if (millis() - lastPrint >= 2000)
+    if (millis() - lastPrint >= 2500)
     {
         lastPrint = millis();
-        ld2410.prettyPrintData(Serial);
+
+        ld2410.getBasicData().printOut(Serial);
+        ld2410.getEngineeringData().printOut(Serial);
     }
 
     yield();

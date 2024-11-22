@@ -38,7 +38,7 @@ public:
         COMMAND_FAILED,
         INVALID_PARAMETER,
         TIMEOUT,
-        NOT_INITIALIZED
+        NOT_INITIALIZED,
     };
 
     // Target states as defined in protocol
@@ -69,7 +69,10 @@ public:
 
         void printOut(Stream &serial) const
         {
-            serial.println(F("\n=== Basic Sensor Data ==="));
+            serial.println();
+            serial.println(F("========================================="));
+            serial.println(F("Basic Data "));
+            serial.println(F("========================================="));
             serial.print(F("Target State: "));
             switch (targetState)
             {
@@ -107,12 +110,13 @@ public:
             serial.print(F("Output Pin: "));
             serial.println(outPinState ? F("Occupied") : F("Unoccupied"));
 
-            serial.print(F("Data Current: "));
-            serial.println(isBasicDataCurrent() ? F("Yes") : F("No"));
+            serial.print(F("Data Age: "));
+            serial.print(millis() - lastSensorDataUpdate);
+            serial.println(F(" ms"));
         }
     };
 
-    struct EngineeringData : public BasicData
+    struct EngineeringData
     {
         uint8_t maxMovingGate;
         uint8_t maxStationaryGate;
@@ -127,15 +131,17 @@ public:
 
         void printOut(Stream &serial) const
         {
-            BasicData::printOut(serial);
-
-            serial.println(F("\n=== Engineering Data ==="));
+            serial.println();
+            serial.println(F("========================================="));
+            serial.println(F("Engineering Data "));
+            serial.println(F("========================================="));
             serial.print(F("Max Moving Gate: "));
             serial.println(maxMovingGate);
             serial.print(F("Max Stationary Gate: "));
             serial.println(maxStationaryGate);
 
-            serial.println(F("\nMoving Energy Gates:"));
+            serial.println();
+            serial.println(F("Moving Energy Gates:"));
             for (int i = 0; i < LD2410_MAX_GATES; i++)
             {
                 serial.print(F("Gate "));
@@ -144,7 +150,8 @@ public:
                 serial.println(movingEnergyGates[i]);
             }
 
-            serial.println(F("\nStationary Energy Gates:"));
+            serial.println();
+            serial.println(F("Stationary Energy Gates:"));
             for (int i = 0; i < LD2410_MAX_GATES; i++)
             {
                 serial.print(F("Gate "));
@@ -153,8 +160,9 @@ public:
                 serial.println(stationaryEnergyGates[i]);
             }
 
-            serial.print(F("\nEngineering Data Current: "));
-            serial.println(isEngineeringDataCurrent() ? F("Yes") : F("No"));
+            serial.print(F("Data Age: "));
+            serial.print(millis() - lastEngineeringDataUpdate);
+            serial.println(F(" ms"));
         }
     };
 
@@ -170,7 +178,10 @@ public:
 
         void printOut(Stream &serial) const
         {
-            serial.println(F("\n=== Configuration Data ==="));
+            serial.println();
+            serial.println(F("========================================="));
+            serial.println(F("Configuration Data "));
+            serial.println(F("========================================="));
             serial.print(F("Max Distance Gate: "));
             serial.println(maxDistanceGate);
             serial.print(F("Configured Max Motion Gate: "));
@@ -181,7 +192,8 @@ public:
             serial.print(noOccupancyDuration);
             serial.println(F(" seconds"));
 
-            serial.println(F("\nMotion Sensitivity:"));
+            serial.println();
+            serial.println(F("Motion Sensitivity:"));
             for (int i = 0; i < 9; i++)
             {
                 serial.print(F("Gate "));
@@ -190,7 +202,8 @@ public:
                 serial.println(motionSensitivity[i]);
             }
 
-            serial.println(F("\nStationary Sensitivity:"));
+            serial.println();
+            serial.println(F("Stationary Sensitivity:"));
             for (int i = 0; i < 9; i++)
             {
                 serial.print(F("Gate "));
@@ -199,7 +212,8 @@ public:
                 serial.println(stationarySensitivity[i]);
             }
 
-            serial.print(F("Configuration Data Age: "));
+            serial.println();
+            serial.print(F("Data Age: "));
             serial.print(millis() - lastConfigurationgDataUpdate);
             serial.println(F(" ms"));
         }
@@ -228,7 +242,6 @@ public:
     const BasicData &getBasicData() const { return _basicData; }
     const EngineeringData &getEngineeringData() const { return _engineeringData; }
     const ConfigurationData &getCurrentConfiguration() const { return _currentConfig; }
-    void prettyPrintData(Stream &output);
     const char *getLastErrorString() const;
 
     String getMacAddress();

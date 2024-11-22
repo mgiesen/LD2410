@@ -181,14 +181,6 @@ void LD2410::FrameProcessor::parseDataFrame(BasicData &data, EngineeringData &en
 
         if (isEngineeringMode)
         {
-            // Copy basic data fields to engineering data
-            engData.targetState = data.targetState;
-            engData.movingTargetDistance = data.movingTargetDistance;
-            engData.movingTargetEnergy = data.movingTargetEnergy;
-            engData.stationaryTargetDistance = data.stationaryTargetDistance;
-            engData.stationaryTargetEnergy = data.stationaryTargetEnergy;
-            engData.detectionDistance = data.detectionDistance;
-
             // Parse additional engineering data
             engData.maxMovingGate = _frame[17];
             engData.maxStationaryGate = _frame[18];
@@ -199,8 +191,6 @@ void LD2410::FrameProcessor::parseDataFrame(BasicData &data, EngineeringData &en
                 engData.stationaryEnergyGates[i] = _frame[28 + i];
             }
 
-            engData.lightSensorValue = _frame[37];
-            engData.outPinState = _frame[38] != 0;
             engData.lastEngineeringDataUpdate = millis();
         }
     }
@@ -223,23 +213,6 @@ void LD2410::CommandManager::init(LD2410 *parent)
 bool LD2410::CommandManager::isInConfigMode() const
 {
     return _inConfigMode;
-}
-
-bool LD2410::CommandManager::validateResponse(const uint8_t *response, uint16_t expectedCommand) const
-{
-    // Check if header is correct
-    if (response[0] != 0xFD || response[1] != 0xFC || response[2] != 0xFB || response[3] != 0xFA)
-    {
-        return false;
-    }
-
-    // Check if the command matches the expected command
-    if (response[6] != (expectedCommand & 0xFF))
-    {
-        return false;
-    }
-
-    return true;
 }
 
 void LD2410::CommandManager::sendCommand(HardwareSerial &serial, const uint8_t *cmd, size_t length)
@@ -304,15 +277,45 @@ bool LD2410::CommandManager::exitConfigMode(HardwareSerial &serial)
     return success;
 }
 
+bool LD2410::CommandManager::validateResponse(const uint8_t *response, uint16_t expectedCommand) const
+{
+    // Check if header is correct
+    if (response[0] != 0xFD || response[1] != 0xFC || response[2] != 0xFB || response[3] != 0xFA)
+    {
+        return false;
+    }
+
+    // Get frame length from response
+    uint16_t frameLength = response[4] | (response[5] << 8);
+
+    // Check minimum length (header + length + command + status + tail = 12 bytes)
+    if (frameLength < 2 || frameLength > LD2410_MAX_FRAME_LENGTH - 10)
+    {
+        return false;
+    }
+
+    // Check if the command matches the expected command
+    if (response[6] != (expectedCommand & 0xFF))
+    {
+        return false;
+    }
+
+    // Check if tail is at expected position based on frame length
+    size_t tailPos = frameLength + 6;
+    if (response[tailPos] != 0x04 || response[tailPos + 1] != 0x03 || response[tailPos + 2] != 0x02 || response[tailPos + 3] != 0x01)
+    {
+        return false;
+    }
+
+    return true;
+}
+
 bool LD2410::CommandManager::waitForAck(HardwareSerial &serial, uint16_t expectedCommand, uint8_t *response)
 {
     unsigned long start = millis();
-    uint8_t buffer[LD2410_MAX_FRAME_LENGTH]; // Buffer for the received ACK
+    uint8_t buffer[LD2410_MAX_FRAME_LENGTH];
     size_t pos = 0;
     bool headerFound = false;
-
-    // Maximum packet length to avoid infinite loops in case of unexpected packets
-    const size_t maxPacketLength = LD2410_MAX_FRAME_LENGTH;
 
     while (millis() - start < LD2410_COMMAND_TIMEOUT)
     {
@@ -329,53 +332,57 @@ bool LD2410::CommandManager::waitForAck(HardwareSerial &serial, uint16_t expecte
             }
 
             // After header is found, keep adding bytes
-            if (headerFound && pos < maxPacketLength)
+            if (headerFound && pos < LD2410_MAX_FRAME_LENGTH)
             {
                 buffer[pos++] = byte;
 
-                // Search for the tail (04 03 02 01)
-                if (pos >= 4 && buffer[pos - 4] == 0x04 && buffer[pos - 3] == 0x03 && buffer[pos - 2] == 0x02 && buffer[pos - 1] == 0x01)
+                // Once we have length bytes (6 bytes including header)
+                if (pos >= 6)
                 {
-                    if (validateResponse(buffer, expectedCommand))
-                    {
-                        // If caller wants the response, copy it to the provided buffer
-                        if (response)
-                        {
-                            memcpy(response, buffer, pos);
-                        }
+                    uint16_t expectedLength = buffer[4] | (buffer[5] << 8);
+                    size_t expectedTotalLength = expectedLength + 10; // Frame length + header(4) + length(2) + tail(4)
 
-                        // Return true if the ACK Status is successful
-                        return buffer[8] == 0x00;
-                    }
-                    else
+                    // Check if we have received the complete frame
+                    if (pos >= expectedTotalLength)
                     {
-                        // If the response is invalid, output and return false
-                        if (_parent)
+                        if (validateResponse(buffer, expectedCommand))
                         {
-                            _parent->debugPrintHex("[LD2410 DEBUGGER] Invalid ACK-Response: ", buffer, pos);
+                            // If caller wants the response and it's valid, copy it
+                            if (response)
+                            {
+                                memcpy(response, buffer, expectedTotalLength);
+                            }
+
+                            // Return true if the ACK Status is successful
+                            return buffer[8] == 0x00;
                         }
-                        return false;
+                        else
+                        {
+                            if (_parent)
+                            {
+                                _parent->debugPrintHex("[LD2410 DEBUGGER] Invalid ACK-Response: ", buffer, pos);
+                            }
+                            return false;
+                        }
                     }
                 }
             }
         }
 
-        // If the maximum packet length is exceeded, break out of the loop
-        if (pos >= maxPacketLength)
+        if (pos >= LD2410_MAX_FRAME_LENGTH)
         {
             break;
         }
 
-        yield(); // Ensure other tasks are not blocked
+        yield();
     }
 
-    // Timeout or invalid response, print the received data
     if (_parent && _parent->_debug_serial)
     {
-        _parent->debugPrintHex("Timeout or invalid ACK-Response: ", buffer, pos); // Print the received data for debugging
+        _parent->debugPrintHex("[LD2410 DEBUGGER] Timeout or invalid ACK-Response: ", buffer, pos);
     }
 
-    return false; // Return false if no valid ACK was received
+    return false;
 }
 
 //===========================================
@@ -508,81 +515,6 @@ void LD2410::useDebug(Stream &debugSerial)
 {
     _debug_serial = &debugSerial;
     debugPrintln("Debug mode enabled");
-}
-
-void LD2410::prettyPrintData(Stream &output)
-{
-    output.println("\n--------------------------------------------------");
-    output.println("LD2410 Data");
-    output.println("--------------------------------------------------");
-
-    output.print("Sensor Data Current: ");
-    output.println(_basicData.isBasicDataCurrent() ? "Yes" : "No");
-
-    output.print("Target State: ");
-    switch (_basicData.targetState)
-    {
-    case TargetState::NO_TARGET:
-        output.println("No Target");
-        break;
-    case TargetState::MOVING:
-        output.println("Moving Target");
-        break;
-    case TargetState::STATIONARY:
-        output.println("Stationary Target");
-        break;
-    case TargetState::MOVING_AND_STATIONARY:
-        output.println("Moving & Stationary Target");
-        break;
-    }
-
-    output.print("Moving Target - Distance: ");
-    output.print(_basicData.movingTargetDistance);
-    output.print(" cm, Energy: ");
-    output.println(_basicData.movingTargetEnergy);
-
-    output.print("Stationary Target - Distance: ");
-    output.print(_basicData.stationaryTargetDistance);
-    output.print(" cm, Energy: ");
-    output.println(_basicData.stationaryTargetEnergy);
-
-    output.print("Detection Distance: ");
-    output.print(_basicData.detectionDistance);
-    output.println(" cm");
-
-    if (_uart.isEngineeringMode)
-    {
-        output.println("\nEngineering Mode Data:");
-
-        output.print("Engineering Data Current: ");
-        output.println(_engineeringData.isEngineeringDataCurrent() ? "Yes" : "No");
-
-        output.println("Moving Energy Gates:");
-        for (int i = 0; i < LD2410_MAX_GATES; i++)
-        {
-            output.print("Gate ");
-            output.print(i);
-            output.print(": ");
-            output.println(_engineeringData.movingEnergyGates[i]);
-        }
-
-        output.println("\nStationary Energy Gates:");
-        for (int i = 0; i < LD2410_MAX_GATES; i++)
-        {
-            output.print("Gate ");
-            output.print(i);
-            output.print(": ");
-            output.println(_engineeringData.stationaryEnergyGates[i]);
-        }
-
-        output.print("\nLight Sensor Value: ");
-        output.println(_engineeringData.lightSensorValue);
-
-        output.print("OUT Pin State: ");
-        output.println(_engineeringData.outPinState ? "Occupied" : "Unoccupied");
-    }
-
-    output.println("--------------------------------------------------\n");
 }
 
 const char *LD2410::getLastErrorString() const
