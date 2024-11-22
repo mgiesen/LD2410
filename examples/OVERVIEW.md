@@ -251,3 +251,69 @@ Sensor Information
 MAC Address: 08:05:04:03:02:01
 Firmware Version: V2.05.1606
 ```
+
+# Example: Distance Resolution Configuration
+
+`resolutionExample.cpp`
+
+## Demonstrates
+
+- Querying current resolution setting
+- Setting new distance resolution (0.75m vs 0.2m)
+
+## Console Output
+
+```console
+ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0x1 (POWERON),boot:0x2b (SPI_FAST_FLASH_BOOT)
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce3808,len:0x4bc
+load:0x403c9700,len:0xbd8
+load:0x403cc700,len:0x2a0c
+entry 0x403c98d0
+[LD2410 DEBUGGER] Debug mode enabled
+[LD2410 DEBUGGER] UART initialized successfully
+
+Initial Configuration:
+
+=========================================
+Distance Resolution Configuration
+=========================================
+Resolution per gate: 0.75 meters
+Maximum gates: 8
+Effective range: 6.00 meters
+
+Detection distance: 418 cm
+Detection distance: 423 cm
+Detection distance: 423 cm
+Detection distance: 423 cm
+Detection distance: 423 cm
+Detection distance: 423 cm
+Detection distance: 423 cm
+Detection distance: 423 cm
+Detection distance: 423 cm
+Detection distance: 423 cm
+
+Switching to high (0.2m) resolution...
+
+=========================================
+Distance Resolution Configuration
+=========================================
+Resolution per gate: 0.20 meters
+Maximum gates: 8
+Effective range: 1.60 meters
+
+Detection distance: 111 cm
+Detection distance: 107 cm
+Detection distance: 106 cm
+Detection distance: 106 cm
+Detection distance: 106 cm
+Detection distance: 106 cm
+Detection distance: 106 cm
+Detection distance: 106 cm
+Detection distance: 106 cm
+Detection distance: 106 cm
+....
+```

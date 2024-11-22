@@ -762,22 +762,59 @@ bool LD2410::setDistanceResolution(bool use020mResolution)
 
     const uint8_t cmd[] = {
         0xFD, 0xFC, 0xFB, 0xFA,
-        0x02, 0x00,
+        0x04, 0x00,
         0xAA, 0x00,
-        (uint8_t)(use020mResolution ? 0x01 : 0x00),
+        static_cast<uint8_t>(use020mResolution ? 0x01 : 0x00), 0x00,
         0x04, 0x03, 0x02, 0x01};
 
     _uart.commandManager.sendCommand(*_uart.serial, cmd, sizeof(cmd));
 
-    bool success = _uart.commandManager.waitForAck(*_uart.serial, 0xAA, nullptr);
+    bool success = _uart.commandManager.waitForAck(*_uart.serial, 0xAA);
+
     _uart.commandManager.exitConfigMode(*_uart.serial);
 
     if (!success)
     {
         setError(Error::COMMAND_FAILED);
+        return false;
     }
 
     return success;
+}
+
+bool LD2410::getDistanceResolution(uint8_t &resolution)
+{
+    if (!_uart.initialized)
+    {
+        setError(Error::NOT_INITIALIZED);
+        return false;
+    }
+
+    if (!_uart.commandManager.enterConfigMode(*_uart.serial))
+    {
+        setError(Error::COMMAND_FAILED);
+        return false;
+    }
+
+    const uint8_t cmd[] = {
+        0xFD, 0xFC, 0xFB, 0xFA,
+        0x02, 0x00,
+        0xAB, 0x00,
+        0x04, 0x03, 0x02, 0x01};
+
+    _uart.commandManager.sendCommand(*_uart.serial, cmd, sizeof(cmd));
+
+    uint8_t response[32];
+    if (_uart.commandManager.waitForAck(*_uart.serial, 0xAB, response))
+    {
+        resolution = response[10];
+        _uart.commandManager.exitConfigMode(*_uart.serial);
+        return true;
+    }
+
+    _uart.commandManager.exitConfigMode(*_uart.serial);
+    setError(Error::TIMEOUT);
+    return false;
 }
 
 bool LD2410::factoryReset()
@@ -803,6 +840,7 @@ bool LD2410::factoryReset()
     _uart.commandManager.sendCommand(*_uart.serial, cmd, sizeof(cmd));
 
     bool success = _uart.commandManager.waitForAck(*_uart.serial, 0xA2, nullptr);
+
     _uart.commandManager.exitConfigMode(*_uart.serial);
 
     if (!success)
@@ -871,7 +909,6 @@ bool LD2410::readConfiguration()
     uint8_t response[64];
     if (_uart.commandManager.waitForAck(*_uart.serial, 0x61, response))
     {
-        debugPrintHex("[LD2410 DEBUGGER] Configuration response: ", response, 32);
         if (response[10] == 0xAA)
         {
             _currentConfig.maxDistanceGate = response[11];

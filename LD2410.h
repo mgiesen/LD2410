@@ -254,6 +254,7 @@ public:
     bool enableEngineeringMode();
     bool disableEngineeringMode();
     bool setBaudRate(unsigned long baudRate);
+    bool getDistanceResolution(uint8_t &resolution);
     bool setDistanceResolution(bool use020mResolution);
     bool factoryReset();
     bool restart();
