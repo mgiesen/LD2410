@@ -1,6 +1,6 @@
 # LD2410
 
-A lightweight library for the LD2410 sensor, enabling easy UART communication and efficient monitoring of sensor output with minimal overhead.
+A streamlined library for the LD2410 sensor, providing a high-level interface for UART communication and output observation, with minimal user code required. Built with the Arduino framework, making it compatible with common MCUs like Espressif chips (e.g., ESP8266, ESP32) and all Arduino boards.
 
 > [!WARNING]  
 > This library is currently under development and is not yet ready for production use. The API may change frequently until the stable release.

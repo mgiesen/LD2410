@@ -5,8 +5,7 @@
  * Version: UNRELEASED
  * Repository: https://github.com/mgiesen/ld2410
  *
- * A lightweight library for the HiLink HLK-LD2410 sensor, enabling easy UART communication
- * and efficient monitoring of sensor output with minimal overhead.
+ * A streamlined library for the LD2410 sensor, providing a high-level interface for UART communication and output observation, with minimal user code required.
  */
 
 #include "LD2410.h"
