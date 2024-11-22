@@ -239,12 +239,6 @@ bool LD2410::CommandManager::validateResponse(const uint8_t *response, uint16_t 
         return false;
     }
 
-    // Check if the status is 0x00 (success)
-    if (response[8] != 0x00)
-    {
-        return false;
-    }
-
     return true;
 }
 
@@ -340,24 +334,25 @@ bool LD2410::CommandManager::waitForAck(HardwareSerial &serial, uint16_t expecte
                 buffer[pos++] = byte;
 
                 // Search for the tail (04 03 02 01)
-                if (pos >= 4 && buffer[pos - 4] == 0x04 && buffer[pos - 3] == 0x03 &&
-                    buffer[pos - 2] == 0x02 && buffer[pos - 1] == 0x01)
+                if (pos >= 4 && buffer[pos - 4] == 0x04 && buffer[pos - 3] == 0x03 && buffer[pos - 2] == 0x02 && buffer[pos - 1] == 0x01)
                 {
-                    // Once the packet is complete, validate it
                     if (validateResponse(buffer, expectedCommand))
                     {
+                        // If caller wants the response, copy it to the provided buffer
                         if (response)
                         {
                             memcpy(response, buffer, pos);
                         }
-                        return true;
+
+                        // Return true if the ACK Status is successful
+                        return buffer[8] == 0x00;
                     }
                     else
                     {
                         // If the response is invalid, output and return false
                         if (_parent)
                         {
-                            _parent->debugPrintHex("Invalid ACK-Response: ", buffer, pos); // Print the received ACK data for debugging
+                            _parent->debugPrintHex("[LD2410 DEBUGGER] Invalid ACK-Response: ", buffer, pos);
                         }
                         return false;
                     }
@@ -407,14 +402,14 @@ bool LD2410::beginUART(uint8_t mcu_rx_pin, uint8_t mcu_tx_pin, HardwareSerial &s
     {
         if (_uart.serial->available())
         {
-            debugPrintln("[LD2410] UART initialized successfully");
+            debugPrintln("[LD2410 DEBUGGER] UART initialized successfully");
             _uart.initialized = true;
             return true;
         }
         delay(10);
     }
 
-    debugPrintln("[LD2410] Failed to initialize UART");
+    debugPrintln("[LD2410 DEBUGGER] Failed to initialize UART");
     _uart.initialized = false;
     return false;
 }
@@ -423,14 +418,14 @@ bool LD2410::beginOutputObservation(uint8_t pin, void (*callback)(bool), uint8_t
 {
     if (callback == nullptr)
     {
-        debugPrintln("[LD2410] Callback can't be null. Output observation not started");
+        debugPrintln("[LD2410 DEBUGGER] Callback can't be null. Output observation not started");
         return false;
     }
 
     // Disable existing interrupt if any
     if (_outputObservation.started)
     {
-        debugPrintln("[LD2410] Output observation already started. Reassigning callback...");
+        debugPrintln("[LD2410 DEBUGGER] Output observation already started. Reassigning callback...");
         detachInterrupt(digitalPinToInterrupt(_outputObservation.pin));
     }
 
@@ -445,7 +440,7 @@ bool LD2410::beginOutputObservation(uint8_t pin, void (*callback)(bool), uint8_t
     attachInterruptArg(digitalPinToInterrupt(pin), digitalOutputInterrupt, this, CHANGE);
 
     _outputObservation.started = true;
-    debugPrintln("[LD2410] Output observation started successfully");
+    debugPrintln("[LD2410 DEBUGGER] Output observation started successfully");
     return true;
 }
 
@@ -475,7 +470,7 @@ void LD2410::readSensorData(uint8_t maxBytesPerLoop)
     {
         if (_uart.frameProcessor.isAckFrame())
         {
-            debugPrintHex("[LD2410] Got unhandled ACK Frame: ", _uart.frameProcessor.getFrameData(), _uart.frameProcessor.getFrameLength());
+            debugPrintHex("[LD2410 DEBUGGER] Got unhandled ACK Frame: ", _uart.frameProcessor.getFrameData(), _uart.frameProcessor.getFrameLength());
         }
         else
         {
@@ -742,7 +737,7 @@ bool LD2410::enableEngineeringMode()
     if (success)
     {
         _uart.isEngineeringMode = true;
-        debugPrintln("[LD2410] Engineering mode enabled");
+        debugPrintln("[LD2410 DEBUGGER] Engineering mode enabled");
     }
     else
     {
@@ -781,7 +776,7 @@ bool LD2410::disableEngineeringMode()
     if (success)
     {
         _uart.isEngineeringMode = false;
-        debugPrintln("[LD2410] Engineering mode disabled");
+        debugPrintln("[LD2410 DEBUGGER] Engineering mode disabled");
     }
     else
     {
