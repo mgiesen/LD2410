@@ -1,6 +1,34 @@
+# Example: Reading state of out pin
+
+`00 - outputPinExample.cpp`
+
+## Demonstrates
+
+- Starting output pin monitoring
+- Starting debugging
+- Printing message on state changes
+
+## Console Output
+
+```console
+ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0x1 (POWERON),boot:0x2b (SPI_FAST_FLASH_BOOT)
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce3808,len:0x4bc
+load:0x403c9700,len:0xbd8
+load:0x403cc700,len:0x2a0c
+entry 0x403c98d0
+[LD2410 DEBUGGER] Debug mode enabled
+[LD2410 DEBUGGER] Output observation started successfully
+Output pin state: LOW
+Output pin state: HIGH
+```
+
 # Example: Reading basic data
 
-`basicExample.cpp`
+`01 - basicExample.cpp`
 
 ## Demonstrates
 
@@ -38,7 +66,7 @@ Data Age: 73 ms
 
 # Example: Reading engineering data
 
-`engineeringExample.cpp`
+`02 - engineeringExample.cpp`
 
 ## Demonstrates
 
@@ -91,22 +119,32 @@ Gate 7: 100
 Data Age: 63 ms
 ```
 
-# Example: Reading state of out pin
+# Example: Reading Sensor Information
 
-`outputPinExample.cpp`
+`03 - sensorInfoExample.cpp`
 
 ## Demonstrates
 
-- Starting output pin monitoring
-- Starting debugging
-- Printing message on state changes
+- Getting MAC address
+- Getting firmware version
+- Proper error handling
+- Debug output configuration
+
+> [!WARNING]  
+> MAC Address Implementation Notes:
+>
+> - The manufacturer's documentation mentions a 3-byte address in big endian
+> - The actual response contains 6 bytes
+> - The returned bytes often contain patterns similar to frame end bytes
+>
+> Issue needs further investigation.
 
 ## Console Output
 
 ```console
-ESP-ROM:esp32s3-20210327
 Build:Mar 27 2021
-rst:0x1 (POWERON),boot:0x2b (SPI_FAST_FLASH_BOOT)
+rst:0x15 (USB_UART_CHIP_RESET),boot:0x2b (SPI_FAST_FLASH_BOOT)
+Saved PC:0x40378be1
 SPIWP:0xee
 mode:DIO, clock div:1
 load:0x3fce3808,len:0x4bc
@@ -114,14 +152,18 @@ load:0x403c9700,len:0xbd8
 load:0x403cc700,len:0x2a0c
 entry 0x403c98d0
 [LD2410 DEBUGGER] Debug mode enabled
-[LD2410 DEBUGGER] Output observation started successfully
-Output pin state: LOW
-Output pin state: HIGH
+[LD2410 DEBUGGER] UART initialized successfully
+
+=========================================
+Sensor Information
+=========================================
+MAC Address: 08:05:04:03:02:01
+Firmware Version: V2.05.1606
 ```
 
 # Example: Read and modify sensor configuration
 
-`readAndModifyConfig.cpp`
+`04 - readAndModifyConfig.cpp`
 
 > [!WARNING]  
 > Issue identified in sensor responses after restart:
@@ -207,51 +249,9 @@ Error: Command failed
 Failed to read new configuration
 ```
 
-# Example: Reading Sensor Information
-
-`sensorInfoExample.cpp`
-
-## Demonstrates
-
-- Getting MAC address
-- Getting firmware version
-- Proper error handling
-- Debug output configuration
-
-> [!WARNING]  
-> MAC Address Implementation Notes:
->
-> - The manufacturer's documentation mentions a 3-byte address in big endian
-> - The actual response contains 6 bytes
-> - The returned bytes often contain patterns similar to frame end bytes
->
-> Issue needs further investigation.
-
-## Console Output
-
-```console
-Build:Mar 27 2021
-rst:0x15 (USB_UART_CHIP_RESET),boot:0x2b (SPI_FAST_FLASH_BOOT)
-Saved PC:0x40378be1
-SPIWP:0xee
-mode:DIO, clock div:1
-load:0x3fce3808,len:0x4bc
-load:0x403c9700,len:0xbd8
-load:0x403cc700,len:0x2a0c
-entry 0x403c98d0
-[LD2410 DEBUGGER] Debug mode enabled
-[LD2410 DEBUGGER] UART initialized successfully
-
-=========================================
-Sensor Information
-=========================================
-MAC Address: 08:05:04:03:02:01
-Firmware Version: V2.05.1606
-```
-
 # Example: Distance Resolution Configuration
 
-`resolutionExample.cpp`
+`05 - resolutionExample.cpp`
 
 ## Demonstrates
 
