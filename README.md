@@ -1,18 +1,23 @@
 # LD2410
 
-A streamlined library for the LD2410 sensor, providing a high-level interface for UART communication and output observation, with minimal user code required. Built with the Arduino framework, making it compatible with common MCUs like Espressif chips (e.g., ESP8266, ESP32) and all Arduino boards.
-
-Additionally, this repository includes a complete web dashboard for the LD2410 library and sensor, enabling data visualization and sensor configuration.
+A comprehensive library for the LD2410 mmWave radar sensor, providing both a high-level interface for UART communication and an optional web dashboard for easy configuration and monitoring. Built with the Arduino framework, making it compatible with common MCUs like Arduinos or Espressif chips (e.g., ESP32).
 
 > [!WARNING]  
 > This library is currently under development and is not yet ready for production use. The API may change frequently until the stable release.
 
 ## Features
 
-- Optional UART communication with configurable baud rates
-- Optional Output pin observation using an interrupt callback
-- Optional Debugging support via serial output
-- Ring buffer implementation for efficient serial data handling
+- **Core Library**
+
+  - Streamlined UART communication
+  - Simple output pin observation
+  - Ring buffer implementation for efficient serial data handling
+  - Minimal user code required
+
+- **Optional Web Dashboard**
+  - Real-time sensor data visualization
+  - Interactive configuration interface
+  - Mobile-friendly responsive design
 
 ## Usage
 
@@ -62,16 +67,18 @@ loop()
 }
 ```
 
-### List of public functions
+### List of retrieval functions
 
 ```cpp
-sensor.beginUART(rx_pin, tx_pin, serial, baud);                     // Initialize UART communication with the sensor
-sensor.useDebug(serialPort);                                        // Enable debugging output to specified serial port
-sensor.readSensorData(maxBytesPerLoop);                             // Process incoming UART data
 sensor.getBasicData();                                              // Get latest basic sensor data
 sensor.getEngineeringData();                                        // Get latest engineering sensor data
 sensor.prettyPrintData(output);                                     // Pretty print current sensor data to output stream
 sensor.getLastErrorString();                                        // Get string description of last error
+```
+
+### List of command functions
+
+```cpp
 sensor.setMaxValues(movingGate, stationaryGate, timeout);           // Set maximum detection gates for moving and stationary targets
 sensor.setGateSensitivityThreshold(gate, moving, stationary);       // Set sensitivity threshold for specific detection gate
 sensor.enableEngineeringMode();                                     // Enable engineering mode for additional sensor data output
@@ -81,6 +88,14 @@ sensor.setDistanceResolution(use020mResolution);                    // Set dista
 sensor.factoryReset();                                              // Reset sensor to factory defaults
 sensor.restart();                                                   // Restart the sensor
 sensor.readConfiguration();                                         // Read current sensor configuration
+```
+
+### Other functions
+
+```cpp
+sensor.beginUART(rx_pin, tx_pin, serial, baud);                     // Initialize UART communication with the sensor
+sensor.useDebug(serialPort);                                        // Enable debugging output to specified serial port
+sensor.readSensorData(maxBytesPerLoop);                             // Process incoming UART data
 sensor.beginOutputObservation(pin, callback, pinMode);              // Start observing sensor's digital output pin with callback
 ```
 
@@ -179,7 +194,9 @@ At the high default baud rate of 256000, the UART buffer can overwrite older dat
 
 The ring buffer architecture mitigates this by ensuring that `readSensorData()` always processes the latest available data. The buffer is sized to hold approximately two engineering data frames, ensuring that complete frames are captured during normal operation.
 
-### Timestamp Management (`lastSensorDataUpdate` and `lastEngineeringDataUpdate`)
+### Timestamp Management
+
+`lastSensorDataUpdate` and `lastEngineeringDataUpdate`
 
 - **Purpose**: Track the freshness of data updates.
   - `lastSensorDataUpdate`: Timestamp of the last basic data update.
