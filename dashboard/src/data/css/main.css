@@ -118,7 +118,7 @@ body {
 
 /* Chart Container */
 .chart-container {
-	aspect-ratio: 16/9;
+	max-height: 200px;
 	width: 100%;
 	background: var(--bg-tertiary);
 	border-radius: 0.75rem;

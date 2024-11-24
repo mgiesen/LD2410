@@ -476,6 +476,11 @@ void LD2410::readSensorData(uint8_t maxBytesPerLoop)
         {
             _uart.frameProcessor.parseDataFrame(_basicData, _engineeringData);
             _uart.isEngineeringMode = (_uart.frameProcessor.getFrameData()[6] == 0x01);
+
+            if (_statusCallback)
+            {
+                _statusCallback(_basicData, _engineeringData);
+            }
         }
     }
 }
@@ -925,6 +930,12 @@ bool LD2410::readConfiguration()
             _currentConfig.lastConfigurationgDataUpdate = millis();
 
             _uart.commandManager.exitConfigMode(*_uart.serial);
+
+            if (_configCallback)
+            {
+                _configCallback(_currentConfig);
+            }
+
             return true;
         }
     }

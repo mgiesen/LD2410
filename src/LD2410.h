@@ -260,7 +260,23 @@ public:
     bool restart();
     bool readConfiguration();
 
+    //===========================================
+    // Callbacks
+    //===========================================
+    void onStatusUpdate(std::function<void(const BasicData &, const EngineeringData &)> callback)
+    {
+        _statusCallback = callback;
+    }
+
+    void onConfigUpdate(std::function<void(const ConfigurationData &)> callback)
+    {
+        _configCallback = callback;
+    }
+
 private:
+    std::function<void(const BasicData &, const EngineeringData &)> _statusCallback = nullptr;
+    std::function<void(const ConfigurationData &)> _configCallback = nullptr;
+
     friend class CommandManager;
 
     class CircularBuffer

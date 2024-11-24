@@ -68,11 +68,14 @@ class RadarInterface
     {
         this.setConnectionStatus('connecting');
 
-        const mockup = true;
-        if (mockup)
+        // Native Implementation will host the frontend on port 80
+        const frontend_hosted_externally = window.location.port != "";
+        if (frontend_hosted_externally)
         {
+            // Port 8080 is used for the mockup server
             this.ws = new WebSocket('ws://localhost:8080');
-        } else
+        }
+        else
         {
             this.ws = new WebSocket(`ws://${window.location.hostname}/ws`);
         }

@@ -314,3 +314,17 @@ Detection distance: 106 cm
 Detection distance: 106 cm
 ....
 ```
+
+# Example: Visualizing and configuring sensor via dashboard
+
+`06 - dashboardExample.cpp`
+
+## Demonstrates
+
+- Connecting MCU to your WiFi
+- Starting LD2410 UART communcation
+- Starting Dashboard
+
+## Screenshot of dashboard
+
+![dashboard.png](overview/dashboard.png)
